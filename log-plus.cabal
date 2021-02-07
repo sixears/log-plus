@@ -3,7 +3,7 @@ name:                log-plus
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.0.1.0
+version:             0.0.2.0
 synopsis:            Logging, the way I like it
 description:         Logging, the way I like it
 cabal-version:       >= 1.10

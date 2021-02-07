@@ -28,6 +28,7 @@ module Log
   , fromList
   , log, logMsg, log', logMsg', logT, logMsgT, logT', logMsgT'
   , logIO, logIO', logIOT
+  , logIOL, logIOL', logIOLT
   , logRender, logRender'
   , logToFD', logToFD, logToFile, logToFile', logToStderr, logToStderr'
   , stackOptions, stackParses, stdRenderers
@@ -124,11 +125,11 @@ import Control.Monad.Identity  ( runIdentity )
 
 -- parsec-plus -------------------------
 
-import ParsecPlus  ( Parsecable( parser ), caseInsensitiveString )
+import ParsecPlus  ( Parsecable( parser ) )
 
 -- parser-plus -------------------------
 
-import ParserPlus  ( tries )
+import ParserPlus  ( caseInsensitiveString, tries )
 
 -- prettyprinter -----------------------
 
@@ -208,6 +209,8 @@ type WithLog α η = (MonadLog (Log α) η, ?stack ∷ CallStack)
 {- | `WithLog`, but with MonadIO, too. -}
 type WithLogIO α μ = (MonadIO μ, MonadLog (Log α) μ, ?stack ∷ CallStack)
 
+type WithLogIOL α μ η = (MonadIO μ, MonadLog (Log α) η, ?stack ∷ CallStack)
+
 type instance Element (Log ω) = LogEntry ω
 
 {- This Foldable instance would give rise to toList being a list of α, i.e., the
@@ -277,6 +280,45 @@ vsep' [] = Nothing
 vsep' xs = Just $ vsep xs
 
 ------------------------------------------------------------
+
+{- | Log with a timestamp, thus causing IO.  This version keeps IO & logging as
+     split monads, because once joined, the only way to split them is to run
+     the logging.
+ -}
+logIOL ∷ ∀ ρ ω μ η . (WithLogIOL ω μ η, ToDoc_ ρ) ⇒ Severity → ω → ρ → μ (η ())
+logIOL sv p txt = do
+  -- note that callstack starts here, *including* the call to logIO; this is
+  -- deliberate, so that we see where in the code we made the log
+  tm ← liftIO getCurrentTime
+  return $
+    logMessage ∘ Log ∘ singleton $ logEntry ?stack (Just tm) sv (toDoc_ txt) p
+
+--------------------
+
+-- We redefine this, rather than simply calling logIOL, so as to not mess with
+-- the callstack.
+{- | Log with a timestamp, thus causing IO.  This version keeps IO & logging as
+     split monads, because once joined, the only way to split them is to run
+     the logging. -}
+logIOL' ∷ ∀ ρ ω μ η . (WithLogIOL ω μ η, ToDoc_ ρ, Default ω) ⇒
+           Severity → ρ → μ (η ())
+logIOL' sv txt = do
+  tm ← liftIO getCurrentTime
+  return $
+    logMessage ∘ Log ∘ singleton $ logEntry ?stack (Just tm) sv (toDoc_ txt) def
+
+--------------------
+
+-- We redefine this, rather than simply calling logIOL, so as to not mess with
+-- the callstack.
+{- | Log `Text` with a timestamp, thus causing IO. -}
+logIOLT ∷ ∀ ω μ η . (WithLogIOL ω μ η, Default ω) ⇒ Severity → Text → μ (η ())
+logIOLT sv txt = do
+  tm ← liftIO getCurrentTime
+  return $
+    logMessage ∘ Log ∘ singleton $ logEntry ?stack (Just tm) sv (toDoc_ txt) def
+
+----------------------------------------
 
 {- | Log with a timestamp, thus causing IO. -}
 logIO ∷ ∀ ρ ω μ . (WithLogIO ω μ, ToDoc_ ρ) ⇒ Severity → ω → ρ → μ ()

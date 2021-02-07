@@ -1,3 +1,7 @@
+0.0.2.0 2020-02-07
+==================
+- Add logIOL*, because later splitting of the log from the IO is hard/impossible
+
 0.0.1.0 2019-09-18
 ==================
 - Log, Log.HasCallStack, Log.HasSeverity, Log.HasUTCTime, Log.LogEntry,
