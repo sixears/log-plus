@@ -1,3 +1,7 @@
+0.0.2.1 2021-02-20
+==================
+- use monadio-plus 1.1.0.0
+
 0.0.2.0 2020-02-07
 ==================
 - Add logIOL*, because later splitting of the log from the IO is hard/impossible
