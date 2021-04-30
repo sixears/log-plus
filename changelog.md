@@ -1,3 +1,7 @@
+0.0.2.2 2021-04-30
+==================
+- use has-callstack in place of inbuilt HasCallstack (also, %k from tfmt)
+
 0.0.2.1 2021-02-20
 ==================
 - use monadio-plus 1.1.0.0

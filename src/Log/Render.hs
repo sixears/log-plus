@@ -24,6 +24,10 @@ import GHC.Stack      ( SrcLoc
 import Data.Function.Unicode  ( (∘) )
 import Data.Monoid.Unicode    ( (⊕) )
 
+-- has-callstack -----------------------
+
+import HasCallstack  ( HasCallstack( callstack, stackhead ) )
+
 -- logging-effect ----------------------
 
 import Control.Monad.Log  ( Severity( Alert, Critical, Debug, Emergency, Error
@@ -60,7 +64,6 @@ import Text.Fmt  ( formatUTCYDoW, fmt )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log.HasCallstack  ( HasCallstack( callstack ), stackHead )
 import Log.HasSeverity   ( HasSeverity( severity ) )
 import Log.HasUTCTime    ( HasUTCTimeY( utcTimeY ), )
 
@@ -139,7 +142,7 @@ renderLocation Nothing    = emptyDoc
 renderWithStackHead ∷ HasCallstack δ ⇒ (δ -> Doc ρ) -> δ -> Doc ρ
 renderWithStackHead f m =
   let renderStackHead = renderLocation ∘ fmap snd
-   in renderStackHead (stackHead m) ⊞ align (f m)
+   in renderStackHead (stackhead m) ⊞ align (f m)
 
 ----------------------------------------
 

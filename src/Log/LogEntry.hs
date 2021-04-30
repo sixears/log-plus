@@ -32,6 +32,10 @@ import Data.Monoid.Unicode   ( (⊕) )
 
 import Data.Textual  ( Printable( print ) )
 
+-- has-callstack -----------------------
+
+import HasCallstack  ( HasCallstack( callsitelist, callstack ) )
+
 -- lens --------------------------------
 
 import Control.Lens.Lens  ( Lens, Lens', lens )
@@ -78,8 +82,6 @@ import Data.Time.Clock     ( UTCTime( UTCTime ), diffUTCTime,secondsToDiffTime )
 --                     local imports                      ---
 -----------------------------------------------------------
 
-import Log.HasCallstack  ( HasCallstack( callsitelist, callstack )
-                         , stackHeadTxt )
 import Log.HasSeverity   ( HasSeverity( severity ) )
 import Log.HasUTCTime    ( HasUTCTimeY( utcTimeY ) )
 
@@ -183,10 +185,10 @@ mapPrefixDoc f = mapDoc (\ e → f e ⊕ e ⊣ logdoc)
 instance Printable ω ⇒ Printable (LogEntry ω) where
   print le =
     let renderDoc = renderStrict ∘ layoutPretty defaultLayoutOptions
-     in P.text $ [fmt|[%Z|%-4t] %t %t <%T>|]
+     in P.text $ [fmt|[%Z|%-4t] %k %t <%T>|]
                                           (le ⊣ utcTimeY)
                                           (take 4 ∘ pack ∘ show $ le ⊣ severity)
-                                          (stackHeadTxt le)
+                                          le
                                           (renderDoc $ le ⊣ logdoc)
                                           (le ⊣ attrs)
 
