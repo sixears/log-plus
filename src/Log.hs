@@ -1,23 +1,3 @@
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ImplicitParams             #-}
-{-# LANGUAGE InstanceSigs               #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE MonadComprehensions        #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE NoImplicitPrelude          #-}
-{-# LANGUAGE NumericUnderscores         #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE TypeApplications           #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE UnicodeSyntax              #-}
-{-# LANGUAGE ViewPatterns               #-}
-
 module Log
   ( CSOpt(..), Log, ToDoc_( toDoc_ ), WithLog, WithLogIO
 
@@ -58,6 +38,7 @@ import Data.String             ( String )
 import Data.Tuple              ( snd )
 import GHC.Enum                ( Enum )
 import GHC.Exts                ( IsList( Item, fromList, toList ) )
+import GHC.Generics            ( Generic )
 import GHC.Stack               ( CallStack )
 import System.Exit             ( ExitCode )
 import System.IO               ( Handle, IO, hFlush, hIsTerminalDevice, stderr )
@@ -77,6 +58,10 @@ import Data.Default  ( Default( def ) )
 -- data-textual ------------------------
 
 import Data.Textual  ( Printable( print ), toText )
+
+-- deepseq -----------------------------
+
+import Control.DeepSeq  ( NFData )
 
 -- dlist -------------------------------
 
@@ -197,7 +182,7 @@ import Log.LogRenderOpts  ( LogR, LogRenderOpts
 
 {- | A list of LogEntries. -}
 newtype Log ω = Log { unLog ∷ DList (LogEntry ω) }
-  deriving (Eq,Functor,Monoid,Semigroup,Show)
+  deriving (Eq,Functor,Generic,Monoid,NFData,Semigroup,Show)
 
 {- | `WithLog` adds in the `CallStack` constraint, so that if you declare your
      function to use this constraint, your function will be included in the
@@ -856,9 +841,9 @@ instance Parsecable CSOpt where
 
 stdRenderers ∷ CSOpt → [LogR ω]
 stdRenderers NoCallStack =
-  [ renderWithTimestamp, renderWithSeverity ] 
+  [ renderWithTimestamp, renderWithSeverity ]
 stdRenderers CallStackHead =
-  [ renderWithTimestamp, renderWithSeverity, renderWithStackHead ] 
+  [ renderWithTimestamp, renderWithSeverity, renderWithStackHead ]
 stdRenderers FullCallStack =
   [ renderWithCallStack, renderWithTimestamp, renderWithSeverity ]
 

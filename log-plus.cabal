@@ -3,7 +3,7 @@ name:                log-plus
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.0.2.2
+version:             0.0.3.0
 synopsis:            Logging, the way I like it
 description:         Logging, the way I like it
 cabal-version:       >= 1.10
@@ -22,12 +22,32 @@ library
                     , Log.Render
                     , T.Log
   other-modules:
-  default-extensions: NoImplicitPrelude
+  default-extensions: ConstraintKinds
+                    , DeriveFunctor
+                    , DeriveGeneric
+                    , FlexibleContexts
+                    , FlexibleInstances
+                    , GeneralizedNewtypeDeriving
+                    , ImplicitParams
+                    , InstanceSigs
+                    , LambdaCase
+                    , MonadComprehensions
+                    , MultiParamTypeClasses
+                    , NoImplicitPrelude
+                    , NumericUnderscores
+                    , OverloadedStrings
+                    , RankNTypes
+                    , TupleSections
+                    , TypeApplications
+                    , TypeFamilies
+                    , UnicodeSyntax
+                    , ViewPatterns
+
   build-depends:      base, base-unicode-symbols, data-default, data-textual
-                    , dlist, exceptions, lens, logging-effect, mono-traversable
-                    , mtl, prettyprinter, prettyprinter-ansi-terminal, safe
-                    , tasty, tasty-hunit, terminal-size, text, text-printer
-                    , time
+                    , deepseq, dlist, exceptions, lens, logging-effect
+                    , mono-traversable, mtl, prettyprinter
+                    , prettyprinter-ansi-terminal, safe, tasty, tasty-hunit
+                    , terminal-size, text, text-printer, time
 
                     , has-callstack >= 1.0.0.0
                     , monadio-plus  >= 1.4.2.0

@@ -1,3 +1,7 @@
+0.0.3.0 2021-07-10
+==================
+- NFData instances of Log, LogEntry
+
 0.0.2.2 2021-04-30
 ==================
 - use has-callstack in place of inbuilt HasCallstack (also, %k from tfmt)

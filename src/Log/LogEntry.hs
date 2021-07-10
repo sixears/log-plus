@@ -8,6 +8,8 @@ module Log.LogEntry
   , _le0, _le1, _le2, _le3, _le4n, _le5n )
 where
 
+import Prelude  ( seq )
+
 -- base --------------------------------
 
 import Data.Bool      ( Bool( False, True ) )
@@ -17,6 +19,7 @@ import Data.Functor   ( Functor( fmap ) )
 import Data.Maybe     ( Maybe( Just, Nothing ) )
 import Data.Ord       ( (<) )
 import Data.String    ( String )
+import GHC.Generics   ( Generic )
 import GHC.Num        ( abs )
 import GHC.Stack      ( CallStack, SrcLoc( SrcLoc ), fromCallSiteList )
 import Text.Show      ( Show( show ) )
@@ -31,6 +34,10 @@ import Data.Monoid.Unicode   ( (⊕) )
 -- data-textual ------------------------
 
 import Data.Textual  ( Printable( print ) )
+
+-- deepseq -----------------------------
+
+import Control.DeepSeq  ( NFData( rnf ) )
 
 -- has-callstack -----------------------
 
@@ -94,7 +101,7 @@ data LogEntry ω = LogEntry { _callstack ∷ CallStack
                            , _logdoc    ∷ Doc ()
                            , _attrs     ∷ ω
                            }
-  deriving Show
+  deriving (Generic,Show)
 
 -- Functor -----------------------------
 
@@ -145,6 +152,15 @@ instance HasSeverity (LogEntry ω) where
 
 instance HasUTCTimeY (LogEntry ω) where
   utcTimeY = lens _timestamp (\ le tm → le { _timestamp = tm })
+
+-- NFData ------------------------------
+
+instance NFData ω ⇒ NFData (LogEntry ω) where
+  -- the uses of seq are naughty, but neither Severity nor Doc() are instances
+  -- of Doc.  Severity is just an enumeration, but Doc() really should be.
+  -- We're being very bad, but I can't be bothered to create a correct orphan
+  -- instance at this point.
+  rnf (LogEntry cs ts sv dc at) = rnf (rnf cs, rnf ts, seq sv, seq dc, rnf at)
 
 ----------------------------------------
 
@@ -230,7 +246,7 @@ _le2 =
                                   ]
    in logEntry _cs1 (Just _tm) Warning msg ()
 _le3 ∷ LogEntry ()
-_le3 = 
+_le3 =
   logEntry _cs1 Nothing Emergency (pretty ("this is the last message" ∷Text)) ()
 
 _le4n ∷ LogEntry ℕ
