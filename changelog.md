@@ -1,3 +1,7 @@
+0.0.3.1 2021-10-13
+==================
+- upgrade dependencies
+
 0.0.3.0 2021-07-10
 ==================
 - NFData instances of Log, LogEntry
