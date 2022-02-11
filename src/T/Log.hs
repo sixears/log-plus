@@ -43,7 +43,7 @@ import Data.MoreUnicode.Text      ( 𝕋 )
 
 -- prettyprinter -----------------------
 
-import Data.Text.Prettyprint.Doc  ( PageWidth( Unbounded ) )
+import Prettyprinter  ( PageWidth( Unbounded ) )
 
 -- tasty -------------------------------
 
@@ -138,13 +138,13 @@ logRenderTests =
       assertListPrefices = assertListCmp toText toText isPrefixOf
       check ∷ 𝕋 → [𝕋] → PureLoggingT (Log ()) Identity () → TestTree
       check name exp got = assertListPrefices name exp (renderL got)
-       
+
    in testGroup "logRender"
                 [ check "_3sf'" exp3sf' _3sf'
                 , check "_4sf'" exp4sf' _4sf'
                 , check "_5sf" exp5sf _5sf
                 ]
-                
+
 ----------------------------------------
 
 tests ∷ TestTree

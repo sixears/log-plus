@@ -118,9 +118,9 @@ import ParserPlus  ( caseInsensitiveString, tries )
 
 -- prettyprinter -----------------------
 
-import qualified  Data.Text.Prettyprint.Doc.Render.Text      as  RenderText
+import qualified  Prettyprinter.Render.Text  as  RenderText
 
-import Data.Text.Prettyprint.Doc  ( Doc, LayoutOptions( LayoutOptions )
+import Prettyprinter  ( Doc, LayoutOptions( LayoutOptions )
                                   , PageWidth( AvailablePerLine, Unbounded )
                                   , SimpleDocStream(..)
                                   , layoutPretty, line', pretty, vsep
@@ -128,7 +128,7 @@ import Data.Text.Prettyprint.Doc  ( Doc, LayoutOptions( LayoutOptions )
 
 -- prettyprinter-ansi-terminal ---------
 
-import qualified  Data.Text.Prettyprint.Doc.Render.Terminal  as  RenderTerminal
+import qualified  Prettyprinter.Render.Terminal  as  RenderTerminal
 
 -- safe --------------------------------
 

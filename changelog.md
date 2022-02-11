@@ -1,3 +1,7 @@
+0.0.4.0 2022-02-10
+==================
+- add Log.LogEntry.simpleDoc (for testing)
+
 0.0.3.1 2021-10-13
 ==================
 - upgrade dependencies

@@ -72,18 +72,18 @@ import Data.MoreUnicode.Natural  ( ℕ )
 
 -- prettyprinter -----------------------
 
-import Data.Text.Prettyprint.Doc  ( Doc, LayoutOptions( LayoutOptions )
+import Prettyprinter              ( Doc, LayoutOptions( LayoutOptions )
                                   , PageWidth( Unbounded )
                                   , defaultLayoutOptions, layoutPageWidth
                                   , layoutPretty, line, pretty, reAnnotate, vsep
                                   )
-import Data.Text.Prettyprint.Doc.Render.Text      ( renderStrict )
+import Prettyprinter.Render.Text  ( renderStrict )
 
 -- prettyprinter-ansi-terminal ---------
 
 
-import qualified  Data.Text.Prettyprint.Doc.Render.Terminal  as  Terminal
-import Data.Text.Prettyprint.Doc.Render.Terminal  ( AnsiStyle )
+import qualified  Prettyprinter.Render.Terminal  as  Terminal
+import Prettyprinter.Render.Terminal  ( AnsiStyle )
 
 -- tasty -------------------------------
 

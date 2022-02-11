@@ -4,7 +4,7 @@
 {-# LANGUAGE UnicodeSyntax     #-}
 
 module Log.LogEntry
-  ( LogEntry, attrs, logdoc, logEntry, mapDoc, mapPrefixDoc, prefix
+  ( LogEntry, attrs, logdoc, logEntry, mapDoc, mapPrefixDoc, prefix, simpleDoc
   , _le0, _le1, _le2, _le3, _le4n, _le5n )
 where
 
@@ -56,13 +56,13 @@ import Control.Monad.Log  ( Severity( Critical, Emergency, Informational
 
 import Data.MoreUnicode.Lens     ( (⊣), (⊢), (⊧) )
 import Data.MoreUnicode.Natural  ( ℕ )
+import Data.MoreUnicode.Text     ( 𝕋 )
 
 -- prettyprinter -----------------------
 
-import Data.Text.Prettyprint.Doc  ( Doc, (<+>), align, defaultLayoutOptions
+import Prettyprinter              ( Doc, (<+>), align, defaultLayoutOptions
                                   , layoutPretty, pretty, vsep )
-import Data.Text.Prettyprint.Doc.Render.Text
-                                  ( renderStrict )
+import Prettyprinter.Render.Text  ( renderStrict )
 
 -- tasty-plus --------------------------
 
@@ -111,11 +111,11 @@ instance Functor LogEntry where
 -- Eq ----------------------------------
 
 instance Eq ω ⇒ Eq (LogEntry ω) where
-  le == le' = let simpleDoc l = layoutPretty defaultLayoutOptions (l ⊣ logdoc)
+  le == le' = let simpleDoc' l = layoutPretty defaultLayoutOptions (l ⊣ logdoc)
                in   le ⊣ callsitelist ≡ le' ⊣ callsitelist
                   ∧ le ⊣ utcTimeY     ≡ le' ⊣ utcTimeY
                   ∧ le ⊣ severity     ≡ le' ⊣ severity
-                  ∧ simpleDoc le      ≡ simpleDoc le'
+                  ∧ simpleDoc' le     ≡ simpleDoc' le'
                   ∧ le ⊣ attrs        ≡ le' ⊣ attrs
 
 -- Equish ------------------------------
@@ -123,7 +123,7 @@ instance Eq ω ⇒ Eq (LogEntry ω) where
 instance Equish ω ⇒ Equish (LogEntry ω) where
   {- | Approximately equal; that is, equal but with timestamps differing by no
        more than 10s (absolute); and no check on the callsitelist. -}
-  le ≃ le' = let simpleDoc l = layoutPretty defaultLayoutOptions (l ⊣ logdoc)
+  le ≃ le' = let simpleDoc' l = layoutPretty defaultLayoutOptions (l ⊣ logdoc)
               in   (case ((le ⊣ utcTimeY), (le' ⊣ utcTimeY)) of
                       (Nothing, Nothing) → True
                       (Just t,  Just t') → abs (diffUTCTime t t') < 10
@@ -131,7 +131,7 @@ instance Equish ω ⇒ Equish (LogEntry ω) where
                    )
 
                  ∧ le ⊣ severity     ≡ le' ⊣ severity
-                 ∧ simpleDoc le      ≡ simpleDoc le'
+                 ∧ simpleDoc' le     ≡ simpleDoc' le'
                  ∧ le ⊣ attrs        ≃ le' ⊣ attrs
 
 {- | Construct a log entry, with no callstack -}
@@ -207,6 +207,12 @@ instance Printable ω ⇒ Printable (LogEntry ω) where
                                           le
                                           (renderDoc $ le ⊣ logdoc)
                                           (le ⊣ attrs)
+
+----------------------------------------
+
+{- | Simplest rendering of a `LogEntry`; just the message as `𝕋`. -}
+simpleDoc ∷ LogEntry ω → 𝕋
+simpleDoc l = renderStrict $ layoutPretty defaultLayoutOptions (l ⊣ logdoc)
 
 -- test data -------------------------------------------------------------------
 

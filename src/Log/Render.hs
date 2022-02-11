@@ -42,13 +42,13 @@ import Data.MoreUnicode.Monoid   ( ю )
 
 -- prettyprinter -----------------------
 
-import Data.Text.Prettyprint.Doc  ( Doc, align, annotate, brackets, emptyDoc
-                                  , indent, line, pretty, vsep )
-import Data.Text.Prettyprint.Doc.Render.Terminal
-                                  ( AnsiStyle, Color( Black, Green, Red, Yellow
-                                                    , White )
-                                  , bgColorDull, bgColor, bold, color,underlined
-                                  )
+import Prettyprinter          ( Doc, align, annotate, brackets, emptyDoc, indent
+                              , line, pretty, vsep )
+import Prettyprinter.Render.Terminal
+                              ( AnsiStyle, Color( Black, Green, Red, Yellow
+                                                , White )
+                              , bgColorDull, bgColor, bold, color,underlined
+                              )
 
 -- text --------------------------------
 
