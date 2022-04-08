@@ -120,11 +120,12 @@ import ParserPlus  ( caseInsensitiveString, tries )
 
 import qualified  Prettyprinter.Render.Text  as  RenderText
 
-import Prettyprinter  ( Doc, LayoutOptions( LayoutOptions )
-                                  , PageWidth( AvailablePerLine, Unbounded )
-                                  , SimpleDocStream(..)
-                                  , layoutPretty, line', pretty, vsep
-                                  )
+import Prettyprinter  ( Doc
+                      , LayoutOptions( LayoutOptions )
+                      , PageWidth( AvailablePerLine, Unbounded )
+                      , SimpleDocStream(..)
+                      , layoutPretty, line', pretty, vsep
+                      )
 
 -- prettyprinter-ansi-terminal ---------
 

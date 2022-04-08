@@ -1,3 +1,19 @@
+0.0.4.4 2022-04-07
+==================
+- updated dependencies
+
+0.0.4.3 2022-04-06
+==================
+- upgrade monadio-plus to 2.3.0.0
+
+0.0.4.2 2022-04-05
+==================
+- upgrade monadio-plus to 2.2.0.0
+
+0.0.4.1 2022-04-04
+==================
+- upgrade dependencies; particularly monadio-plus to 2.1.0.0
+
 0.0.4.0 2022-02-10
 ==================
 - add Log.LogEntry.simpleDoc (for testing)
