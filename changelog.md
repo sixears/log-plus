@@ -1,3 +1,7 @@
+0.0.4.5 2025-12-05
+==================
+- updated call to formatUTCYDoW for tfmt 0.3.1.0
+
 0.0.4.4 2022-04-07
 ==================
 - updated dependencies

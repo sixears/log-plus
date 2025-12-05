@@ -1,9 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
-{-# LANGUAGE TypeApplications  #-}
-{-# LANGUAGE UnicodeSyntax     #-}
-
 module Log.Render
   ( renderWithCallStack, renderWithSeverity, renderWithSeverityAndTimestamp
   , renderWithSeverityAnsi, renderWithStackHead, renderWithTimestamp )
@@ -38,6 +32,7 @@ import Control.Monad.Log  ( Severity( Alert, Critical, Debug, Emergency, Error
 import Data.MoreUnicode.Doc      ( (⊞) )
 import Data.MoreUnicode.Functor  ( (⊳) )
 import Data.MoreUnicode.Lens     ( (⊣) )
+import Data.MoreUnicode.Maybe    ( pattern 𝓝 )
 import Data.MoreUnicode.Monoid   ( ю )
 
 -- prettyprinter -----------------------
@@ -119,7 +114,7 @@ renderWithSeverity f m = brackets (renderSeverity m) ⊞ align (f m)
 ----------------------------------------
 
 renderTimestamp  ∷ HasUTCTimeY τ ⇒ τ → Doc ρ
-renderTimestamp m = pretty (formatUTCYDoW $ m ⊣ utcTimeY)
+renderTimestamp m = pretty (formatUTCYDoW 𝓝 $ m ⊣ utcTimeY)
 
 ----------
 
