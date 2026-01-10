@@ -17,37 +17,46 @@ module Log
   , tests, _log0, _log0m, _log1, _log1m )
 where
 
+import Debug.Trace  ( traceShow )
+
 -- base --------------------------------
 
-import qualified  Data.Foldable  as  Foldable
+import qualified Control.Concurrent.MVar  as  MVar
+import qualified  Data.Foldable           as  Foldable
 
-import Control.Concurrent      ( threadDelay )
-import Control.Monad           ( Monad, forM_, return )
-import Data.Bool               ( Bool( True ) )
-import Data.Eq                 ( Eq )
-import Data.Foldable           ( Foldable, all, concatMap, foldl', foldl1
-                               , foldMap, foldr, foldr1 )
-import Data.Function           ( ($), (&), flip, id )
-import Data.Functor            ( Functor, fmap )
-import Data.List               ( zip )
-import Data.List.NonEmpty      ( NonEmpty( (:|) ), nonEmpty )
-import Data.Maybe              ( Maybe( Just, Nothing ), catMaybes )
-import Data.Monoid             ( Monoid )
-import Data.Semigroup          ( Semigroup )
-import Data.String             ( String )
-import Data.Tuple              ( snd )
-import GHC.Enum                ( Enum )
-import GHC.Exts                ( IsList( Item, fromList, toList ) )
-import GHC.Generics            ( Generic )
-import GHC.Stack               ( CallStack )
-import System.Exit             ( ExitCode )
-import System.IO               ( Handle, IO, hFlush, hIsTerminalDevice, stderr )
-import Text.Show               ( Show )
+import Control.Concurrent       ( threadDelay )
+import Control.Monad            ( Monad, forM_, return )
+import Control.Monad.IO.Class   ( MonadIO, liftIO )
+import Data.Bool                ( Bool( True ) )
+import Data.Eq                  ( Eq )
+import Data.Foldable            ( Foldable, all, concatMap, foldl', foldl1
+                                , foldMap, foldr, foldr1 )
+import Data.Function            ( ($), (&), flip, id )
+import Data.Functor             ( Functor, fmap )
+import Data.List                ( zip )
+import Data.List.NonEmpty       ( NonEmpty( (:|) ), nonEmpty )
+import Data.Maybe               ( Maybe( Just, Nothing ), catMaybes )
+import Data.Monoid              ( Monoid )
+import Data.Ord                 ( Ord, (>) )
+import Data.Semigroup           ( Semigroup )
+import Data.String              ( String )
+import Data.Tuple               ( fst, snd )
+import Data.Word                ( Word16, Word64 )
+import GHC.Enum                 ( Enum )
+import GHC.Exts                 ( IsList( Item, fromList, toList ) )
+import GHC.Generics             ( Generic )
+import GHC.Num                  ( Num, (+) )
+import GHC.Real                 ( Integral, Real )
+import GHC.Stack                ( CallStack )
+import System.Exit              ( ExitCode )
+import System.IO                ( Handle, IO, hClose, hFlush, hIsTerminalDevice
+                                , stderr )
+import Text.Show                ( Show )
 
 -- base-unicode-symbols ----------------
 
 import Data.Bool.Unicode      ( (∧) )
-import Data.Eq.Unicode        ( (≡) )
+import Data.Eq.Unicode        ( (≡), (≠) )
 import Data.Function.Unicode  ( (∘) )
 import Data.Monoid.Unicode    ( (⊕) )
 
@@ -72,6 +81,15 @@ import Data.DList  ( DList, singleton )
 
 import Control.Monad.Catch  ( MonadMask )
 
+-- fpath -------------------------------
+
+import FPath.AbsFile    ( AbsFile, absfile )
+import FPath.Parseable  ( __parse'__ )
+
+-- lens --------------------------------
+
+import Control.Lens.Getter  ( view )
+
 -- logging-effect ----------------------
 
 import Control.Monad.Log  ( BatchingOptions( BatchingOptions
@@ -82,9 +100,16 @@ import Control.Monad.Log  ( BatchingOptions( BatchingOptions
                           , runLoggingT, runPureLoggingT, withBatchedHandler
                           )
 
+-- monaderror-io -----------------------
+
+import MonadError           ( ж )
+import MonadError.IO.Error  ( IOError )
+
 -- monadio-plus ------------------------
 
-import MonadIO  ( MonadIO, liftIO )
+import MonadIO              ( MonadIO, liftIO )
+import MonadIO.NamedHandle  ( HEncoding( NoEncoding ), handle )
+import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
 
 -- mono-traversable --------------------
 
@@ -101,12 +126,20 @@ import Data.MoreUnicode.Applicative  ( (⋫) )
 import Data.MoreUnicode.Bool         ( 𝔹 )
 import Data.MoreUnicode.Functor      ( (⊳), (⩺) )
 import Data.MoreUnicode.Lens         ( (⊣), (⊧) )
+import Data.MoreUnicode.Maybe        ( 𝕄, pattern 𝓙, pattern 𝓝 )
 import Data.MoreUnicode.Monad        ( (⪼), (≫) )
 import Data.MoreUnicode.Natural      ( ℕ )
+import Data.MoreUnicode.Text         ( 𝕋 )
 
 -- mtl ---------------------------------
 
 import Control.Monad.Identity  ( runIdentity )
+
+-- natural -----------------------------
+
+import Natural           ( (⊞) )
+import Natural.Length    ( щ )
+import Natural.Unsigned  ( ɨ )
 
 -- parsec-plus -------------------------
 
@@ -123,13 +156,14 @@ import qualified  Prettyprinter.Render.Text  as  RenderText
 import Prettyprinter  ( Doc
                       , LayoutOptions( LayoutOptions )
                       , PageWidth( AvailablePerLine, Unbounded )
-                      , SimpleDocStream(..)
+                      , SimpleDocStream( SEmpty )
                       , layoutPretty, line', pretty, vsep
                       )
 
 -- prettyprinter-ansi-terminal ---------
 
 import qualified  Prettyprinter.Render.Terminal  as  RenderTerminal
+import Prettyprinter.Render.Terminal  ( AnsiStyle )
 
 -- safe --------------------------------
 
@@ -155,12 +189,18 @@ import qualified  System.Console.Terminal.Size  as  TerminalSize
 
 -- text --------------------------------
 
-import Data.Text     ( Text, intercalate, length, lines, unlines )
-import Data.Text.IO  ( hPutStrLn )
+import qualified Data.Text.Lazy
+
+import Data.Text     ( intercalate, length, lines, unlines )
+import Data.Text.IO  ( hPutStr, hPutStrLn )
 
 -- text-printer ------------------------
 
 import qualified  Text.Printer  as  P
+
+-- tfmt --------------------------------
+
+import Text.Fmt  ( fmt, fmtT )
 
 -- time --------------------------------
 
@@ -237,7 +277,7 @@ instance MonoSingle (Log ω) where
 class ToDoc_ α where
   toDoc_ ∷ α → Doc ()
 
-instance ToDoc_ Text where
+instance ToDoc_ 𝕋 where
   toDoc_ = pretty
 
 instance ToDoc_ (Doc()) where
@@ -261,7 +301,7 @@ instance IsList (Log ω) where
       variant, `vsep'`, which declares `Nothing` for empty docs, thus we can
       completely ignore them (don't call the logger at all).
 -}
-vsep' ∷ [Doc α] → Maybe (Doc α)
+vsep' ∷ [Doc α] → 𝕄 (Doc α)
 vsep' [] = Nothing
 vsep' xs = Just $ vsep xs
 
@@ -298,7 +338,7 @@ logIOL' sv txt = do
 -- We redefine this, rather than simply calling logIOL, so as to not mess with
 -- the callstack.
 {- | Log `Text` with a timestamp, thus causing IO. -}
-logIOLT ∷ ∀ ω μ η . (WithLogIOL ω μ η, Default ω) ⇒ Severity → Text → μ (η ())
+logIOLT ∷ ∀ ω μ η . (WithLogIOL ω μ η, Default ω) ⇒ Severity → 𝕋 → μ (η ())
 logIOLT sv txt = do
   tm ← liftIO getCurrentTime
   return $
@@ -329,7 +369,7 @@ logIO' sv txt = do
 -- We redefine this, rather than simply calling logIO, so as to not mess with
 -- the callstack.
 {- | Log `Text` with a timestamp, thus causing IO. -}
-logIOT ∷ ∀ ω μ . (WithLogIO ω μ, Default ω) ⇒ Severity → Text → μ ()
+logIOT ∷ ∀ ω μ . (WithLogIO ω μ, Default ω) ⇒ Severity → 𝕋 → μ ()
 logIOT sv txt = do
   tm ← liftIO getCurrentTime
   logMessage ∘ Log ∘ singleton $ logEntry ?stack (Just tm) sv (toDoc_ txt) def
@@ -361,28 +401,28 @@ logMsg' = log'
 ----------
 
 {- | `log`, with input type fixed to Text to avoid having to specify. -}
-logT ∷ ∀ ω η . (WithLog ω η) ⇒ Severity → ω → Text → η ()
+logT ∷ ∀ ω η . (WithLog ω η) ⇒ Severity → ω → 𝕋 → η ()
 logT sv p txt =
   logMessage ∘ Log ∘ singleton $ logEntry ?stack Nothing sv (toDoc_ txt) p
 
 ----------
 
 {- | Alias for `logT`, for consistency with `logMsg`. -}
-logMsgT ∷ ∀ ω η . (WithLog ω η) ⇒ Severity → ω → Text → η ()
+logMsgT ∷ ∀ ω η . (WithLog ω η) ⇒ Severity → ω → 𝕋 → η ()
 logMsgT sv p txt =
   logMessage ∘ Log ∘ singleton $ logEntry ?stack Nothing sv (toDoc_ txt) p
 
 ----------
 
 {- | `log'`, with input type fixed to Text to avoid having to specify. -}
-logT' ∷ ∀ ω η . (WithLog ω η, Default ω) ⇒ Severity → Text → η ()
+logT' ∷ ∀ ω η . (WithLog ω η, Default ω) ⇒ Severity → 𝕋 → η ()
 logT' sv txt =
   logMessage ∘ Log ∘ singleton $ logEntry ?stack Nothing sv (toDoc_ txt) def
 
 ----------
 
 {- | Alias for `logT'`, for consistency with `logMsg`. -}
-logMsgT' ∷ ∀ ω η . (WithLog ω η, Default ω) ⇒ Severity → Text → η ()
+logMsgT' ∷ ∀ ω η . (WithLog ω η, Default ω) ⇒ Severity → 𝕋 → η ()
 logMsgT' sv txt =
   logMessage ∘ Log ∘ singleton $ logEntry ?stack Nothing sv (toDoc_ txt) def
 
@@ -398,7 +438,7 @@ emergency' = log Emergency def
 
 ----------
 
-emergencyT ∷ (WithLog ω η, Default ω) ⇒ Text → η ()
+emergencyT ∷ (WithLog ω η, Default ω) ⇒ 𝕋 → η ()
 emergencyT = emergency'
 
 ----------
@@ -413,7 +453,7 @@ alert' = log Alert def
 
 ----------
 
-alertT ∷ (WithLog ω η, Default ω) ⇒ Text → η ()
+alertT ∷ (WithLog ω η, Default ω) ⇒ 𝕋 → η ()
 alertT = alert'
 
 ----------
@@ -428,7 +468,7 @@ critical' = log Critical def
 
 ----------
 
-criticalT ∷ (WithLog ω η, Default ω) ⇒ Text → η ()
+criticalT ∷ (WithLog ω η, Default ω) ⇒ 𝕋 → η ()
 criticalT = critical'
 
 ----------
@@ -443,7 +483,7 @@ err' = log Error def
 
 ----------
 
-errT ∷ (WithLog ω η, Default ω) ⇒ Text → η ()
+errT ∷ (WithLog ω η, Default ω) ⇒ 𝕋 → η ()
 errT = err'
 
 ----------
@@ -458,7 +498,7 @@ warn' = log Warning def
 
 ----------
 
-warnT ∷ (WithLog ω η, Default ω) ⇒ Text → η ()
+warnT ∷ (WithLog ω η, Default ω) ⇒ 𝕋 → η ()
 warnT = warn'
 
 ----------
@@ -473,7 +513,7 @@ notice' = log Notice def
 
 ----------
 
-noticeT ∷ (WithLog ω η, Default ω) ⇒ Text → η ()
+noticeT ∷ (WithLog ω η, Default ω) ⇒ 𝕋 → η ()
 noticeT = notice'
 
 ----------
@@ -488,7 +528,7 @@ info' = log Informational def
 
 ----------
 
-infoT ∷ (WithLog ω η, Default ω) ⇒ Text → η ()
+infoT ∷ (WithLog ω η, Default ω) ⇒ 𝕋 → η ()
 infoT = info'
 
 ----------
@@ -503,7 +543,7 @@ debug' = log Debug def
 
 ----------
 
-debugT ∷ (WithLog ω η, Default ω) ⇒ Text → η ()
+debugT ∷ (WithLog ω η, Default ω) ⇒ 𝕋 → η ()
 debugT = debug'
 
 ----------------------------------------
@@ -528,7 +568,7 @@ renderMapLog renderer trx ls =
 
 renderMapLog' ∷ Foldable ψ ⇒
                 (LogEntry ω → Doc ρ) → ψ (LogTransformer ω) → LogEntry ω
-              → Maybe (Doc ρ)
+              → 𝕄 (Doc ρ)
 renderMapLog' renderer trx le = vsep' ∘ renderMapLog renderer trx $ osingle le
 
 ----------------------------------------
@@ -539,7 +579,7 @@ logRender ∷ Monad η ⇒
           → [LogTransformer ω] -- log transformers, folded in order
                                -- from right-to-left
           → PureLoggingT (Log ω) η α
-          → η (α, [Text])
+          → η (α, [𝕋])
 logRender lro trx a = do
   (a',ls) ← runPureLoggingT a
   let lpretty ∷ Doc ρ → SimpleDocStream ρ
@@ -552,7 +592,7 @@ logRender lro trx a = do
 {- | `logRender` with `()` is sufficiently common to warrant a cheap alias. -}
 logRender' ∷ Monad η ⇒
              LogRenderOpts ω → [LogTransformer ω] → PureLoggingT (Log ω) η ()
-           → η [Text]
+           → η [𝕋]
 logRender' opts trx lg = snd ⊳ (logRender opts trx lg)
 
 ----------
@@ -562,7 +602,7 @@ logRender'Tests =
   let render o = runIdentity ∘ logRender' o []
       layoutSimple ∷ Doc ρ → SimpleDocStream ρ
       layoutSimple = layoutPretty (LayoutOptions Unbounded)
-      docTxt ∷ Doc ρ → Text
+      docTxt ∷ Doc ρ → 𝕋
       docTxt = RenderText.renderStrict ∘ layoutSimple
       msgLen ∷ Doc ρ → Doc ()
       msgLen d = pretty (length $ docTxt d)
@@ -572,13 +612,13 @@ logRender'Tests =
       msgLenTransform le = [le & logdoc ⊧ msgLen]
       msgTrimTransform ∷ LogEntry ρ → [LogEntry ρ]
       msgTrimTransform le = [le & logdoc ⊧ msgTrim]
-      exp2 ∷ [Text]
+      exp2 ∷ [𝕋]
       exp2 = [ intercalate "\n" [ "[Info] log_entry 1"
                                 , "  stack0, called at c:1:2 in a:b"
                                 , "    stack1, called at f:5:6 in d:e"
                                 ]
              ]
-      exp3 ∷ [Text]
+      exp3 ∷ [𝕋]
       exp3 = [ "[1970-01-01Z00:00:00 Thu] [Info] «c#1» log_entry 1"
              , intercalate "\n" [   "[-----------------------] [CRIT] «y#9» "
                                   ⊕ "multi-line"
@@ -596,19 +636,19 @@ logRender'Tests =
                            ]
              , "[-----------------------] [EMRG] «y#9» this is the last message"
              ]
-      exp4 ∷ [Text]
+      exp4 ∷ [𝕋]
       exp4 = [ "[1970-01-01Z00:00:00 Thu] [Info] «c#1» 11"
              , "[-----------------------] [CRIT] «y#9» 22"
              , "[1970-01-01Z00:00:00 Thu] [Warn] «y#9» 63"
              , "[-----------------------] [EMRG] «y#9» 24"
              ]
-      exp5 ∷ [Text]
+      exp5 ∷ [𝕋]
       exp5 = [ "[1970-01-01Z00:00:00 Thu] [Info] «c#1» log_entry 1"
              , "[-----------------------] [CRIT] «y#9» multi-line"
              , "[1970-01-01Z00:00:00 Thu] [Warn] «y#9» this is a"
              , "[-----------------------] [EMRG] «y#9» this is the last message"
              ]
-      exp6 ∷ [Text]
+      exp6 ∷ [𝕋]
       exp6 = [ "[1970-01-01Z00:00:00 Thu] [Info] «c#1» 11"
              , "[-----------------------] [CRIT] «y#9» 10"
              , "[1970-01-01Z00:00:00 Thu] [Warn] «y#9» 9"
@@ -644,48 +684,145 @@ logRender'Tests =
 
 ----------------------------------------
 
-whenJust ∷ Monad η ⇒ (α → η ()) → Maybe α → η ()
+whenJust ∷ Monad η ⇒ (α → η ()) → 𝕄 α → η ()
 whenJust _  Nothing  = return ()
 whenJust io (Just y) = io y
+
+------------------------------------------------------------
+
+newtype NonEmptyMVar α = NonEmptyMVar { getMVar ∷ MVar.MVar α }
+
+newMVar ∷ α → MonadIO μ => μ (NonEmptyMVar α)
+newMVar = liftIO ∘ (NonEmptyMVar ⩺ MVar.newMVar)
+
+-- Read the value (guaranteed to be present)
+readMVar ∷ MonadIO μ => NonEmptyMVar α → μ α
+readMVar = liftIO ∘ MVar.readMVar ∘ getMVar
+
+-- Replace the value, ensuring the MVar remains non-empty
+swapMVar ∷ MonadIO μ => NonEmptyMVar α → α → μ α
+swapMVar (NonEmptyMVar mvar) = liftIO ∘ MVar.swapMVar mvar
+
+-- Set the value, ensuring the MVar remains non-empty
+setMVar ∷ MonadIO μ => NonEmptyMVar α → α → μ ()
+-- we need to use MVar.swapMVar to ensure that the value is never empty, (which
+-- would happen if we used take-then-put); and that the function doesn't stall
+-- (which would happen when the mvar is full, i.e., always)
+setMVar mvar val = swapMVar mvar val ⪼ return ()
+
+------------------------------------------------------------
+
+flusher ∷ ∀ δ σ ρ ψ μ . (MonadIO μ, Foldable ψ) => -- δ is, e.g., Handle
+          (σ → 𝕋 → μ (δ,σ))               -- ^ handle generator
+        → NonEmptyMVar σ                  -- ^ incoming handle state
+        → (SimpleDocStream ρ → 𝕋)         -- ^ render SimpleDocStream ρ to 𝕋
+--        → (δ → SimpleDocStream ρ → μ ())  -- ^ write messages to log
+        → (δ → 𝕋 → μ ())  -- ^ write messages to log
+        → PageWidth
+        → ψ (Doc ρ)                       -- ^ messages to log
+        → μ ()
+flusher hgen stvar renderT r pw messages = do
+  let layout ∷ Foldable ψ ⇒ ψ (Doc π) → SimpleDocStream π
+      layout ms = layoutPretty (LayoutOptions pw)
+                               (vsep (Foldable.toList ms) ⊕ line')
+      sds = layout messages
+      t   = renderT sds
+  st ← liftIO$ readMVar stvar
+  (h,st') ← hgen st t
+  liftIO $ setMVar stvar st'
+  -- XXX
+  r h t
+
+----------------------------------------
+
+newtype SizeBytes = SizeBytes Word64
+  deriving (Enum,Eq,Integral,Num,Ord,Real,Show)
+
+{-| Log to a file, which is rotated by size.
+
+    Every time we're about to write a log, we check to see the size of the file
+    (as monitored from prior logwriting), and if we're about to exceed the given
+    max size (and this isn't the first write to the file): we rotate the files,
+    and log to a new file.
+-}
+-- state (σ) is (current handle in use,bytes written so far,
+--               index (starts at zero, incrementing))
+
+-- XXX add mode selector
+
+fileSizeRotator ∷ ∀ σ ω μ . (MonadIO μ, σ ~ (𝕄 Handle,SizeBytes,Word16)) =>
+                  SizeBytes → Word16 → (Word16 → AbsFile) → σ → ω → 𝕋 → μ (Handle,σ)
+fileSizeRotator max_size max_files fngen (ɦ,bytes_written,x) sds t = do
+  let l           = SizeBytes (ɨ $ щ t) -- length of t
+      bytes_would = bytes_written + l
+      mkhandle    = do
+        let fn = fngen x
+            -- open a file, mode 0644, raise if it fails
+            open_file = ж ∘ openFile @_ @_ @IOError NoEncoding (FileW (𝓙 0o644))
+        traceShow ("mkhandle",bytes_written,l,x,fn) $ return ()
+        view handle ⊳ open_file fn
+  case ɦ of
+    𝓙 h → if bytes_written ≠ 0 ∧ bytes_would > max_size
+             -- XXX move old file; allow setting of perms
+          then do let new_fn = traceShow ("then") $ fngen x
+                  liftIO $ hClose h
+                  -- h ← ж $ openFile @_ @_ @IOError NoEncoding (FileW (𝓙 0o644)) new_fn
+                  ẖ ← mkhandle
+                  -- let ẖ = h ⊣ handle
+                  return (ẖ,(𝓙 ẖ,l,x+1))
+          else traceShow ("else") $ return (h,(𝓙 h,bytes_would,x))
+    𝓝   → traceShow ("Nothing" ) $ do { ẖ ← mkhandle; return (ẖ,(𝓙 ẖ,l,x+1)) }
 
 ----------------------------------------
 
 {- | Write to an FD with given options, using `withBatchedHandler`.
      Each log entry is vertically separated.
  -}
-withFDHandler ∷ (MonadIO μ, MonadMask μ) ⇒
-                (Handle → SimpleDocStream ρ → IO ())
-              → PageWidth
-              → BatchingOptions
-              → Handle
-              → (Handler μ (Doc ρ) → μ α) -- A.K.A, (Doc ρ → μ ()) → μ α
-              → μ α
-withFDHandler r pw bopts fd handler =
+withFDHandler ∷ ∀ α δ σ ρ μ . (MonadIO μ, MonadMask μ) ⇒
+               (σ → SimpleDocStream ρ → 𝕋 → IO (δ,σ))
+             → (SimpleDocStream ρ → 𝕋)
+             → (δ → 𝕋 → IO())
+             → PageWidth
+             → BatchingOptions
+             → σ
+             → (Handler μ (Doc ρ) → μ α) -- A.K.A, (Doc ρ → μ ()) → μ α
+             → μ (α,σ)
+
+withFDHandler hgen renderT r pw bopts st handler = do
+  -- even though this looks like it should happen every time through the loop;
+  -- tracing it, it clearly doesn't.  I don't know why, I guess it's something
+  -- to do with the construction of monadlog: but I don't seem to need to worry
+  -- about the cost of creating new mvars
+  stvar ← newMVar st
   let layout ∷ Foldable ψ ⇒ ψ (Doc π) → SimpleDocStream π
       layout ms = layoutPretty (LayoutOptions pw)
                                (vsep (Foldable.toList ms) ⊕ line')
-      -- flush ∷ Foldable ψ ⇒ ψ (Doc ρ) → IO()
-      flush messages = r fd (layout messages) ⪼ hFlush fd
-   in withBatchedHandler bopts flush handler
+      -- flush ∷ Foldable ψ ⇒ ψ (Doc ρ) → IO ()
+      flush ms = flusher (\ ṡ t → hgen ṡ (layout ms) t) stvar renderT r pw ms
+  a ← withBatchedHandler bopts flush handler
+  st' ← readMVar stvar
+  return (a,st')
+
+----------------------------------------
 
 {- | Write to an FD with given options, immediately (in thread), no batching.
      Each log entry has a newline appended.
  -}
 withSimpleHandler ∷ MonadIO μ ⇒
-                    PageWidth
+                    (SimpleDocStream ρ → 𝕋)
+                  → PageWidth
                   → Handle
-                  → (Handle → SimpleDocStream ρ → IO ())
-                  → (LogEntry ω → Maybe (Doc ρ))
+                  → (Handle → 𝕋 → IO ())
+                  → (LogEntry ω → 𝕄 (Doc ρ))
                   → LoggingT (Log ω) μ α
                   → μ α
-withSimpleHandler pw fd hPutSDS entryToDoc =
+withSimpleHandler renderT pw fd hWrite entryToDoc =
   let hPutNewline h = hPutStrLn h ""
       layout = layoutPretty (LayoutOptions pw)
-      renderEntry e = let go d = do let -- sds ∷ SimpleDocStream ρ
-                                       sds = layout d
-                                    hPutSDS fd sds
+      renderEntry e = let go d = do let sds {- ∷ SimpleDocStream ρ -} = layout d
+                                    hWrite fd (renderT sds)
                                     hPutNewline fd
-                       in whenJust go (entryToDoc e)
+                      in  whenJust go (entryToDoc e)
       renderEach l = do liftIO $ forM_ (toList l) renderEntry
 
    in (flip runLoggingT) (renderEach)
@@ -720,64 +857,116 @@ ttyBatchingOptions = BatchingOptions { flushMaxDelay     = 2_000
 
 ----------------------------------------
 
-{- | Write a Log to a filehandle, with given rendering and options. -}
-logToHandle ∷ (MonadIO μ, MonadMask μ) ⇒
-              (Handle → SimpleDocStream ρ → IO()) -- ^ write an SDSρ to Handle
-            → (LogEntry ω → Maybe (Doc ρ))        -- ^ render a LogEntry
-            → Maybe BatchingOptions
-            → PageWidth
-            → Handle
-            → LoggingT (Log ω) μ α
-            → μ α
-logToHandle renderIO renderEntry (Just bopts) width fh io =
-  let -- renderDoc   ∷ Log ω → Maybe (Doc ρ)
-      renderDoc   =
-        vsep ∘ toList ⩺ nonEmpty ∘ catMaybes ∘ fmap renderEntry ∘ otoList
+{-| Write a Log to a filehandle, with given rendering and options.
+    The handle is created by a generator function, which may keep state.
+-}
+logToHandles ∷ ∀ α σ ρ ω μ  . (MonadIO μ, MonadMask μ) =>
+               (σ → SimpleDocStream ρ → 𝕋 → IO (Handle, σ)) -- ^ handle generator
+             → (SimpleDocStream ρ → 𝕋)
+             → (LogEntry ω → 𝕄 (Doc ρ)) -- ^ render a LogEntry
+             → 𝕄 BatchingOptions
+             → PageWidth
+             → σ
+             → LoggingT (Log ω) μ α
+             → μ (α,σ)
 
-      -- handler     ∷ (Maybe (Doc ρ) → μ ()) → μ α
-      handler h   =
-        runLoggingT io (whenJust h ∘ renderDoc)
-   in withFDHandler renderIO width bopts fh handler
+logToHandles hgen renderT renderEntry mbopts width st io = do
+  let renderIO h t = hPutStr h t ⪼ hFlush h -- ∷ Handle→ SimpleDocStream ρ →IO()
+  (fh,ṡṫ) ← liftIO $ hgen st SEmpty ""
+  a ← case mbopts of
+    𝓝       → withSimpleHandler renderT width fh renderIO renderEntry io
+    𝓙 bopts →
+      let renderDoc {- Log ω → 𝕄 (Doc ρ) -} =
+            vsep ∘ toList ⩺ nonEmpty ∘ catMaybes ∘ fmap renderEntry ∘otoList
 
-logToHandle renderIO renderEntry Nothing width fh io =
-  withSimpleHandler width fh renderIO renderEntry io
+          -- handler ∷ (𝕄 (Doc ρ) → μ ()) → μ α
+          handler h  = runLoggingT io (whenJust h ∘ renderDoc)
+
+          -- XXX use PathComponent, possibly in conjunction with
+          -- AbsFile.updateBasename, to make this safe
+          fngen = __parse'__ @AbsFile ∘ [fmt|/tmp/foo.%d|]
+          -- hgen  = fileSizeRotator 10 fngen
+--       in fst ⊳ withFDHandler hgen renderT renderIO width bopts (𝓙 fh,0,0) handler
+       in fst ⊳ withFDHandler hgen renderT renderIO width bopts ṡṫ handler
+  return (a,ṡṫ)
+
+----------------------------------------
+
+{-| simple handle generator for use with logToHandles, that always uses a single
+    filehandle -}
+staticHandle ∷ ∀ ρ μ . MonadIO μ =>
+               Handle → SimpleDocStream ρ → 𝕋 → μ (Handle,Handle)
+staticHandle h _ _ = return (h,h)
+
+----------------------------------------
+
+newtype BytesWritten = BytesWritten Word64
+
+sizedHandle ∷ MonadIO μ =>
+              (BytesWritten,Handle) → μ (Handle,(BytesWritten,Handle))
+sizedHandle (w,h) = return (h,(w,h))
+
+----------------------------------------
+
+{- | Write a log to a filehandle, generated at need, with given options but no
+     adornments. -}
+logToHandlesNoAdornments ∷ (MonadIO μ, MonadMask μ) ⇒
+                           (σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
+                           -- ^ handle generator
+                         → 𝕄 BatchingOptions
+                         → LogRenderOpts ω
+                         → [LogTransformer ω]
+                         → σ
+                         → LoggingT (Log ω) μ α
+                         → μ α
+logToHandlesNoAdornments hgen bopts lro trx st io =
+  fst ⊳ logToHandles hgen RenderText.renderStrict
+                     (renderMapLog' (lroRenderer lro) trx) bopts (lro ⊣ lroWidth)
+                     st io
 
 --------------------
 
 {- | Write a Log to a filehandle, with given options but no adornments. -}
 logToHandleNoAdornments ∷ (MonadIO μ, MonadMask μ) ⇒
-                          Maybe BatchingOptions
+                          𝕄 BatchingOptions
                         → LogRenderOpts ω
                         → [LogTransformer ω]
                         → Handle
                         → LoggingT (Log ω) μ α
                         → μ α
-logToHandleNoAdornments bopts lro trx =
-  logToHandle RenderText.renderIO
-              (renderMapLog' (lroRenderer lro) trx) bopts (lro ⊣ lroWidth)
+-- XXX temporary for testing handle alterAnnotations
+-- XXX temorary ignore incoming filehandle to test that
+
+-- logToHandleNoAdornments = logToHandlesNoAdornments staticHandle
+logToHandleNoAdornments bopts lro trx h =
+  -- XXX use PathComponent, possibly in conjunction with
+  -- AbsFile.updateBasename, to make this safe
+  logToHandlesNoAdornments (fileSizeRotator 10 10 (__parse'__ @AbsFile ∘ [fmt|/tmp/foo.%d|])) bopts lro trx ({- 𝓙 h -} 𝓝,0,0)
 
 --------------------
 
 {- | Write a Log to a filehandle, with given options and Ansi adornments. -}
 logToHandleAnsi ∷ (MonadIO μ, MonadMask μ) ⇒
-                  Maybe BatchingOptions
+                  𝕄 BatchingOptions
                 → LogRenderOpts ω
                 → [LogTransformer ω]
                 → Handle
                 → LoggingT (Log ω) μ α
                 → μ α
-logToHandleAnsi bopts lro trx =
-  logToHandle RenderTerminal.renderIO
-              (renderMapLog' (lroRenderer lro) trx)
-              bopts
-              (lro ⊣ lroWidth)
+logToHandleAnsi bopts lro trx fh io =
+  fst ⊳ logToHandles staticHandle
+                     (Data.Text.Lazy.toStrict ∘ RenderTerminal.renderLazy)
+                     (renderMapLog' (lroRenderer lro) trx)
+                     bopts
+                     (lro ⊣ lroWidth)
+                     fh
+                     io
 
 ----------------------------------------
 
 {- | Log to a regular file, with unbounded width. -}
 logToFile' ∷ (MonadIO μ, MonadMask μ) ⇒
-             [LogR ω] → [LogTransformer ω] →Handle →LoggingT (Log ω) μ α
-           → μ α
+             [LogR ω] → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α → μ α
 logToFile' ls trx =
   let lro = logRenderOpts' ls Unbounded
    in logToHandleNoAdornments (Just fileBatchingOptions) lro trx
@@ -786,8 +975,7 @@ logToFile' ls trx =
 
 {- | Log to a tty, using current terminal width. -}
 logToTTY' ∷ (MonadIO μ, MonadMask μ) ⇒
-            [LogR ω] → [LogTransformer ω] → Handle →LoggingT (Log ω) μ α
-          → μ α
+            [LogR ω] → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α → μ α
 logToTTY' ls trx h io = do
   size ← liftIO $ TerminalSize.size
   let lro = case size of
@@ -921,18 +1109,18 @@ _log2 = do logT Warning       1 "start"
            logT Critical      2 "end"
 
 _log0io ∷ (MonadIO μ, MonadLog (Log ℕ) μ) ⇒ μ ()
-_log0io = do logIO @Text Warning 1 "start"
+_log0io = do logIO @𝕋 Warning 1 "start"
              liftIO $ threadDelay 1_000_000
-             logIO @Text Informational 3 "middle"
+             logIO @𝕋 Informational 3 "middle"
              liftIO $ threadDelay 1_000_000
-             logIO @Text Critical 2 "end"
+             logIO @𝕋 Critical 2 "end"
 
 _log1io ∷ (MonadIO μ, MonadLog (Log ℕ) μ) ⇒ μ ()
-_log1io = do logIO @Text Warning 1 "start"
+_log1io = do logIO @𝕋 Warning 1 "start"
              liftIO $ threadDelay 1_000_000
-             logIO @Text Informational 3 "you shouldn't see this"
+             logIO @𝕋 Informational 3 "you shouldn't see this"
              liftIO $ threadDelay 1_000_000
-             logIO @Text Critical 2 "end"
+             logIO @𝕋 Critical 2 "end"
 
 -- tests -------------------------------
 
