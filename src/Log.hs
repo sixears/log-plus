@@ -24,23 +24,25 @@ import Debug.Trace  ( traceShow )
 import qualified Control.Concurrent.MVar  as  MVar
 import qualified  Data.Foldable           as  Foldable
 
-import Control.Concurrent       ( threadDelay )
-import Control.Monad            ( Monad, forM_, return )
+import Control.Applicative      ( Applicative( (<*>), pure ) )
+import Control.Concurrent       ( forkIO, threadDelay )
+import Control.Monad            ( Monad, (>>=), forM_, join, return )
 import Control.Monad.IO.Class   ( MonadIO, liftIO )
 import Data.Bool                ( Bool( True ) )
+import Data.Either              ( either )
 import Data.Eq                  ( Eq )
 import Data.Foldable            ( Foldable, all, concatMap, foldl', foldl1
                                 , foldMap, foldr, foldr1 )
-import Data.Function            ( ($), (&), flip, id )
+import Data.Function            ( ($), (&), const, flip, id )
 import Data.Functor             ( Functor, fmap )
 import Data.List                ( zip )
 import Data.List.NonEmpty       ( NonEmpty( (:|) ), nonEmpty )
-import Data.Maybe               ( Maybe( Just, Nothing ), catMaybes )
+import Data.Maybe               ( Maybe( Just, Nothing ), catMaybes, maybe )
 import Data.Monoid              ( Monoid )
 import Data.Ord                 ( Ord, (>) )
 import Data.Semigroup           ( Semigroup )
 import Data.String              ( String )
-import Data.Tuple               ( fst, snd )
+import Data.Tuple               ( fst, snd, uncurry )
 import Data.Word                ( Word16, Word64 )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( Item, fromList, toList ) )
@@ -49,8 +51,8 @@ import GHC.Num                  ( Num, (+) )
 import GHC.Real                 ( Integral, Real )
 import GHC.Stack                ( CallStack )
 import System.Exit              ( ExitCode )
-import System.IO                ( Handle, IO, hClose, hFlush, hIsTerminalDevice
-                                , stderr )
+import System.IO                ( Handle, IO, hFlush, hIsTerminalDevice, stderr )
+import System.IO.Error          ( isDoesNotExistError )
 import Text.Show                ( Show )
 
 -- base-unicode-symbols ----------------
@@ -83,12 +85,17 @@ import Control.Monad.Catch  ( MonadMask )
 
 -- fpath -------------------------------
 
-import FPath.AbsFile    ( AbsFile, absfile )
-import FPath.Parseable  ( __parse'__ )
+import FPath.AbsFile        ( AbsFile, absfile )
+import FPath.File           ( File( FileA ) )
+import FPath.FileLike       ( (⊙) )
+import FPath.Parseable      ( __parse'__ )
+import FPath.PathComponent  ( PathComponent, pc )
 
 -- lens --------------------------------
 
-import Control.Lens.Getter  ( view )
+import Control.Lens.Getter     ( view )
+import Control.Lens.Setter     ( over )
+import Control.Lens.Traversal  ( both )
 
 -- logging-effect ----------------------
 
@@ -102,14 +109,19 @@ import Control.Monad.Log  ( BatchingOptions( BatchingOptions
 
 -- monaderror-io -----------------------
 
-import MonadError           ( ж )
-import MonadError.IO.Error  ( IOError )
+import MonadError           ( ѥ, ж )
+import MonadError.IO.Error  ( AsIOError, IOError, _IOErr )
 
 -- monadio-plus ------------------------
 
-import MonadIO              ( MonadIO, liftIO )
-import MonadIO.NamedHandle  ( HEncoding( NoEncoding ), handle )
-import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
+import MonadIO.Error.CreateProcError  ( ProcError )
+import MonadIO.File                   ( devnull, rename )
+import MonadIO.FStat                  ( FExists( FExists ), lfexists )
+import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
+                                        handle, hClose, hname )
+import MonadIO.OpenFile               ( FileOpenMode( FileR, FileW ), openFile )
+import MonadIO.Process                ( doProc )
+import MonadIO.Process.CmdSpec        ( mkCmd )
 
 -- mono-traversable --------------------
 
@@ -123,21 +135,23 @@ import Data.MonoTraversable  ( Element
 -- more-unicode ------------------------
 
 import Data.MoreUnicode.Applicative  ( (⋫) )
-import Data.MoreUnicode.Bool         ( 𝔹 )
-import Data.MoreUnicode.Functor      ( (⊳), (⩺) )
-import Data.MoreUnicode.Lens         ( (⊣), (⊧) )
+import Data.MoreUnicode.Bool         ( 𝔹, pattern 𝓣 )
+import Data.MoreUnicode.Either       ( 𝔼, pattern 𝓛, pattern 𝓡 )
+import Data.MoreUnicode.Functor      ( (⊳), (⊳⊳), (⩺) )
+import Data.MoreUnicode.Lens         ( (⊣), (⊧), (⩼) )
 import Data.MoreUnicode.Maybe        ( 𝕄, pattern 𝓙, pattern 𝓝 )
 import Data.MoreUnicode.Monad        ( (⪼), (≫) )
 import Data.MoreUnicode.Natural      ( ℕ )
+import Data.MoreUnicode.Semigroup    ( (◇) )
 import Data.MoreUnicode.Text         ( 𝕋 )
 
 -- mtl ---------------------------------
 
+import Control.Monad.Except    ( ExceptT, MonadError )
 import Control.Monad.Identity  ( runIdentity )
 
 -- natural -----------------------------
 
-import Natural           ( (⊞) )
 import Natural.Length    ( щ )
 import Natural.Unsigned  ( ɨ )
 
@@ -175,11 +189,12 @@ import Single( MonoSingle( osingle ), single )
 
 -- tasty -------------------------------
 
-import Test.Tasty  ( TestTree, testGroup )
+import Test.Tasty        ( TestName, TestTree, testGroup )
+import Test.Tasty.HUnit  ( Assertion, assertBool, testCase )
 
 -- tasty-plus --------------------------
 
-import TastyPlus         ( assertListEq, assertListEqIO
+import TastyPlus         ( assertIsJust, assertLeft, assertListEq, assertListEqIO
                          , runTestsP, runTestsReplay, runTestTree )
 import TastyPlus.Equish  ( Equish( (≃) ) )
 
@@ -200,11 +215,15 @@ import qualified  Text.Printer  as  P
 
 -- tfmt --------------------------------
 
-import Text.Fmt  ( fmt, fmtT )
+import Text.Fmt  ( fmt )
 
 -- time --------------------------------
 
 import Data.Time.Clock     ( getCurrentTime )
+
+-- unix --------------------------------
+
+import System.Posix.Types  ( CMode )
 
 ------------------------------------------------------------
 --                     local imports                       -
@@ -219,7 +238,99 @@ import Log.LogRenderOpts  ( LogR, LogRenderOpts
                           , renderWithStackHead, renderWithTimestamp
                           )
 
+import LogPlus.Paths  qualified as  Paths
+
 --------------------------------------------------------------------------------
+
+-- odd ordering of variables make definition of Functor, Applicative, Monad
+-- instances easier (or maybe possible)
+data EMonad ε μ α = MonadIO μ => EMonad { runEMonadE ∷ μ (𝔼 ε α) }
+
+--------------------
+
+instance Functor (EMonad ε μ) where
+  fmap f (EMonad m) = EMonad $ fmap (fmap f) m
+
+--------------------
+
+instance MonadIO μ => Applicative (EMonad ε μ) where
+  pure x = EMonad $ return (𝓡 x)
+  (EMonad f) <*> (EMonad x) = EMonad $ do
+    f' ← f
+    x' ← x
+    return $ f' <*> x'
+
+--------------------
+
+instance MonadIO μ => Monad (EMonad ε μ) where
+  (EMonad io) >>= f = EMonad $ do
+    result ← io
+    case result of
+      𝓛 e → return (𝓛 e)      -- halt further computation
+      𝓡 b → runEMonadE (f b)
+
+--------------------
+
+eMonad ∷ ∀ ε α μ . MonadIO μ => ExceptT ε μ α → EMonad ε μ α
+eMonad = EMonad ∘ ѥ
+
+ꙗ ∷ ∀ ε α μ . MonadIO μ => ExceptT ε μ α → EMonad ε μ α
+ꙗ = eMonad
+
+--------------------
+
+{-| Given an Either, dump the Left to stderr; return Right as a Just -}
+eToStderr ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => 𝔼 ε α → μ (𝕄 α)
+eToStderr (𝓛 e) = do { liftIO $ hPutStrLn stderr (toText e); return 𝓝 }
+eToStderr (𝓡 r) = return (𝓙 r)
+
+eToStderr' ∷ Printable ε => 𝔼 ε α → IO ()
+eToStderr' = (const ()) ⩺ eToStderr
+
+runEMonad ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => EMonad ε μ α → μ (𝕄 α)
+runEMonad m = runEMonadE m ≫ eToStderr
+
+ꙝ ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => ExceptT ε μ α → μ (𝕄 α)
+ꙝ = runEMonad ∘ eMonad
+
+ꙝ' ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => ExceptT ε μ α → μ ()
+ꙝ' = const () ⩺ ꙝ
+
+----------------------------------------
+
+eMonadTests ∷ TestTree
+eMonadTests =
+  let openr x = do
+        openFile @IOError NoEncoding FileR x ≫ \ h → hClose h ⪼ return h
+      passwd  = [absfile|/etc/passwd|]
+      group   = [absfile|/etc/group|]
+      nonsuch = [absfile|/etc/nonesuch|]
+      run     ∷ (MonadIO μ, Show α, Printable ε) => ExceptT ε μ α → μ (𝕄 α)
+      run     = runEMonad ∘ EMonad ∘ ѥ
+      runE    ∷ (MonadIO μ, Show α, Printable ε) => ExceptT ε μ α → μ (𝔼 ε α)
+      runE    = runEMonadE ∘ EMonad ∘ ѥ
+      assertDoesNotExist ∷ (Show α, AsIOError ε) => 𝔼 ε α → Assertion
+      assertDoesNotExist = assertLeft (  assertBool "isDoesNotExistError"
+                                       ∘ (≡ 𝓙 𝓣)
+                                       ∘ (isDoesNotExistError ⩺ (⩼ _IOErr)))
+      testIsJust ∷ (Show α, Printable ε) =>
+                   TestName → ExceptT ε IO α → TestTree
+      testIsJust tn io = testCase tn $ run io ≫ assertIsJust
+
+      testDoesNotExist ∷ (Show α, AsIOError ε, Printable ε) =>
+                         TestName → ExceptT ε IO α → TestTree
+      testDoesNotExist tn io = testCase tn $ runE io ≫ assertDoesNotExist
+
+  in  testGroup "EMonad" $
+                [ testIsJust       "open ok"        $ openr passwd
+                , testDoesNotExist "open not ok"    $ openr nonsuch
+                , testDoesNotExist "open not ok→ok" $ openr nonsuch⪼openr passwd
+                , testDoesNotExist "open not ok × 2"$openr nonsuch⪼openr nonsuch
+                , testDoesNotExist "open ok→not ok" $ openr passwd⪼openr nonsuch
+                , testIsJust       "open ok→ok"     $ openr passwd ⪼ openr group
+                ]
+
+------------------------------------------------------------
 
 {- | A list of LogEntries. -}
 newtype Log ω = Log { unLog ∷ DList (LogEntry ω) }
@@ -750,28 +861,65 @@ newtype SizeBytes = SizeBytes Word64
 
 -- XXX add mode selector
 
-fileSizeRotator ∷ ∀ σ ω μ . (MonadIO μ, σ ~ (𝕄 Handle,SizeBytes,Word16)) =>
-                  SizeBytes → Word16 → (Word16 → AbsFile) → σ → ω → 𝕋 → μ (Handle,σ)
-fileSizeRotator max_size max_files fngen (ɦ,bytes_written,x) sds t = do
+takeWhileM ∷ Monad m => (a → m Bool) → [a] → m [a]
+takeWhileM _ []     = return []
+takeWhileM p (x:xs) = p x ≫ \ b → if b then (x:) ⊳ takeWhileM p xs else return []
+
+data DoCompress = DoCompress | DoNotCompress
+
+-- XXX  rotate in reverse order
+-- XXX  separate rename from compress
+-- XXX  compress rotated files pzstd; handle extension
+-- XXX  choose compressor
+-- XXX  async compressor
+-- XXX  factor out compression
+-- XXX  always write to the name
+fileSizeRotator ∷ ∀ σ ω μ . (MonadIO μ, σ ~ (𝔼 File ℍ,SizeBytes,Word16)) =>
+                  SizeBytes → CMode → Word16 → (Word16 → File) → σ → ω → 𝕋
+                → μ (Handle,σ)
+fileSizeRotator max_size file_mode max_files fngen (ɦ,bytes_written,x) sds t = do
+  let compressor f t = (Paths.pzstd, ["--quiet", "--check", toText f, "-o", toText t, "--rm"])
+      comp_ext    = [pc|.zst|]
   let l           = SizeBytes (ɨ $ щ t) -- length of t
       bytes_would = bytes_written + l
-      mkhandle    = do
+      fngen' i    = fngen i ⊙ comp_ext
+      compress ∷ MonadIO μ' => PathComponent → File → File → ExceptT ProcError μ' ()
+      compress ext f t = do
+        rename f t
+        let (exe,args) = compressor t (t ⊙ ext)
+        null ← {- ж $ -} devnull -- @IOError
+        () ← snd ⊳ doProc {- @ProcError -} (return ()) null (uncurry mkCmd (exe,args))
+        return ()
+--      forky_fork ∷ MonadIO μ => IO α → μ ()
+--      forky_fork = liftIO ⩺ (const ()) ⩺ forkIO ∘ (const () ⊳)
+      mkhandle    = traceShow ("ɦ", ɦ) $ do
+        -- only compress when making the first archive file
+        let proto_moves = (either id (view hname) ɦ, fngen 0, 𝓙 comp_ext)
+                        : (uncurry (,,𝓝) ⊳
+                          ((over both fngen')⊳zip [0..max_files] [1..max_files]))
+        mv_files ← flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
+          (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
+        liftIO $ forM_ mv_files $ \ (from,to,do_compress) → do
+          case do_compress of
+            𝓝 → traceShow ("mv_files", (from,to)) $ (const 𝓝) ⊳ (ꙝ' $ rename @IOError from to)
+
+            𝓙 ext → traceShow ("compress", (from,to)) $ 𝓙 ⩺ forkIO ∘ join $ eToStderr' ⊳ (ѥ @ProcError $ do compress ext from to)
         let fn = fngen x
             -- open a file, mode 0644, raise if it fails
-            open_file = ж ∘ openFile @_ @_ @IOError NoEncoding (FileW (𝓙 0o644))
+            open_file ∷ MonadIO μ => File → μ ℍ
+            open_file = ж ∘ openFile @IOError NoEncoding (FileW (𝓙 file_mode))
         traceShow ("mkhandle",bytes_written,l,x,fn) $ return ()
-        view handle ⊳ open_file fn
+        open_file fn
   case ɦ of
-    𝓙 h → if bytes_written ≠ 0 ∧ bytes_would > max_size
+    𝓡 𝕙 → if bytes_written ≠ 0 ∧ bytes_would > max_size
              -- XXX move old file; allow setting of perms
           then do let new_fn = traceShow ("then") $ fngen x
-                  liftIO $ hClose h
+                  hClose 𝕙
                   -- h ← ж $ openFile @_ @_ @IOError NoEncoding (FileW (𝓙 0o644)) new_fn
-                  ẖ ← mkhandle
-                  -- let ẖ = h ⊣ handle
-                  return (ẖ,(𝓙 ẖ,l,x+1))
-          else traceShow ("else") $ return (h,(𝓙 h,bytes_would,x))
-    𝓝   → traceShow ("Nothing" ) $ do { ẖ ← mkhandle; return (ẖ,(𝓙 ẖ,l,x+1)) }
+                  𝕙' ← mkhandle
+                  return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
+          else traceShow ("else") $ return (𝕙 ⊣ handle,(𝓡 𝕙,bytes_would,x))
+    𝓛 ħ → traceShow ("Lefty" ) $ mkhandle ≫ \ 𝕙' → return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
 
 ----------------------------------------
 
@@ -884,7 +1032,7 @@ logToHandles hgen renderT renderEntry mbopts width st io = do
 
           -- XXX use PathComponent, possibly in conjunction with
           -- AbsFile.updateBasename, to make this safe
-          fngen = __parse'__ @AbsFile ∘ [fmt|/tmp/foo.%d|]
+          fngen = __parse'__ @AbsFile ∘ [fmt|/tmp/foo.%d.zst|]
           -- hgen  = fileSizeRotator 10 fngen
 --       in fst ⊳ withFDHandler hgen renderT renderIO width bopts (𝓙 fh,0,0) handler
        in fst ⊳ withFDHandler hgen renderT renderIO width bopts ṡṫ handler
@@ -938,10 +1086,11 @@ logToHandleNoAdornments ∷ (MonadIO μ, MonadMask μ) ⇒
 -- XXX temorary ignore incoming filehandle to test that
 
 -- logToHandleNoAdornments = logToHandlesNoAdornments staticHandle
-logToHandleNoAdornments bopts lro trx h =
+logToHandleNoAdornments bopts lro trx h l = do
   -- XXX use PathComponent, possibly in conjunction with
   -- AbsFile.updateBasename, to make this safe
-  logToHandlesNoAdornments (fileSizeRotator 10 10 (__parse'__ @AbsFile ∘ [fmt|/tmp/foo.%d|])) bopts lro trx ({- 𝓙 h -} 𝓝,0,0)
+--  𝕙 ← ж $ openFile @_ @_ @IOError NoEncoding (FileW (𝓙 0o644)) [absfile|/tmp/bax|]
+  logToHandlesNoAdornments (fileSizeRotator 10 0o644 10 (__parse'__ @File ∘ [fmt|/tmp/foo.%d|])) bopts lro trx (𝓛 (FileA [absfile|/tmp/bax|]),0,0) l
 
 --------------------
 
@@ -1125,7 +1274,7 @@ _log1io = do logIO @𝕋 Warning 1 "start"
 -- tests -------------------------------
 
 tests ∷ TestTree
-tests = testGroup "Log" [ logRender'Tests ]
+tests = testGroup "Log" [ logRender'Tests, eMonadTests ]
 
 ----------------------------------------
 
