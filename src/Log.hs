@@ -10,9 +10,11 @@ module Log
   , logIO, logIO', logIOT
   , logIOL, logIOL', logIOLT
   , logRender, logRender'
-  , logToFD', logToFD, logToFile, logToFile', logToStderr, logToStderr'
+  , logToFD', logToFD, logToFile, logToFiles, logToFileHandleNoAdornments, logToStderr
+  , logToStderr'
   , stackOptions, stackParses, stdRenderers
   , logFilter, mapLog, mapLogE
+  , simpleRotator
   -- test data
   , tests, _log0, _log0m, _log1, _log1m )
 where
@@ -25,21 +27,21 @@ import qualified Control.Concurrent.MVar  as  MVar
 import qualified  Data.Foldable           as  Foldable
 
 import Control.Applicative      ( Applicative( (<*>), pure ) )
-import Control.Concurrent       ( forkIO, threadDelay )
+import Control.Concurrent       ( ThreadId, forkIO, threadDelay )
 import Control.Monad            ( Monad, (>>=), forM_, join, return )
 import Control.Monad.IO.Class   ( MonadIO, liftIO )
-import Data.Bool                ( Bool( True ) )
+import Data.Bool                ( Bool( True ), otherwise )
 import Data.Either              ( either )
-import Data.Eq                  ( Eq )
+import Data.Eq                  ( Eq( (==) ) )
 import Data.Foldable            ( Foldable, all, concatMap, foldl', foldl1
                                 , foldMap, foldr, foldr1 )
 import Data.Function            ( ($), (&), const, flip, id )
 import Data.Functor             ( Functor, fmap )
-import Data.List                ( zip )
+import Data.List                ( reverse, zip )
 import Data.List.NonEmpty       ( NonEmpty( (:|) ), nonEmpty )
 import Data.Maybe               ( Maybe( Just, Nothing ), catMaybes, maybe )
 import Data.Monoid              ( Monoid )
-import Data.Ord                 ( Ord, (>) )
+import Data.Ord                 ( Ord, (>), (<), (<=) )
 import Data.Semigroup           ( Semigroup )
 import Data.String              ( String )
 import Data.Tuple               ( fst, snd, uncurry )
@@ -47,13 +49,13 @@ import Data.Word                ( Word16, Word64 )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( Item, fromList, toList ) )
 import GHC.Generics             ( Generic )
-import GHC.Num                  ( Num, (+) )
-import GHC.Real                 ( Integral, Real )
+import GHC.Num                  ( Num, (+), (-) )
+import GHC.Real                 ( Integral, Real, div, fromIntegral )
 import GHC.Stack                ( CallStack )
 import System.Exit              ( ExitCode )
 import System.IO                ( Handle, IO, hFlush, hIsTerminalDevice, stderr )
 import System.IO.Error          ( isDoesNotExistError )
-import Text.Show                ( Show )
+import Text.Show                ( Show( show ) )
 
 -- base-unicode-symbols ----------------
 
@@ -139,10 +141,11 @@ import Data.MoreUnicode.Bool         ( 𝔹, pattern 𝓣 )
 import Data.MoreUnicode.Either       ( 𝔼, pattern 𝓛, pattern 𝓡 )
 import Data.MoreUnicode.Functor      ( (⊳), (⊳⊳), (⩺) )
 import Data.MoreUnicode.Lens         ( (⊣), (⊧), (⩼) )
-import Data.MoreUnicode.Maybe        ( 𝕄, pattern 𝓙, pattern 𝓝 )
+import Data.MoreUnicode.Maybe        ( 𝕄, pattern 𝓙, pattern 𝓝, (⧏) )
 import Data.MoreUnicode.Monad        ( (⪼), (≫) )
 import Data.MoreUnicode.Natural      ( ℕ )
 import Data.MoreUnicode.Semigroup    ( (◇) )
+import Data.MoreUnicode.String       ( 𝕊 )
 import Data.MoreUnicode.Text         ( 𝕋 )
 
 -- mtl ---------------------------------
@@ -152,8 +155,10 @@ import Control.Monad.Identity  ( runIdentity )
 
 -- natural -----------------------------
 
-import Natural.Length    ( щ )
-import Natural.Unsigned  ( ɨ )
+import Natural            ( (⊟) )
+import Natural.Length     ( щ )
+import Natural.Replicate  ( replicate_ )
+import Natural.Unsigned   ( I64, Unsigned, ɨ )
 
 -- parsec-plus -------------------------
 
@@ -867,44 +872,63 @@ takeWhileM p (x:xs) = p x ≫ \ b → if b then (x:) ⊳ takeWhileM p xs else re
 
 data DoCompress = DoCompress | DoNotCompress
 
--- XXX  rotate in reverse order
--- XXX  separate rename from compress
--- XXX  compress rotated files pzstd; handle extension
+{-| fork some IO; echo any issues to stderr, ignore any return value -}
+forkAnyEStderr ∷ Printable ε => IO (𝔼 ε α) → IO ThreadId
+forkAnyEStderr io = forkIO ∘ join $ eToStderr' ⊳ io
+
+pzstd ∷ MonadIO μ => File → File → ExceptT ProcError μ ()
+pzstd f t = do
+  -- rename f t
+  let compressor f t = (Paths.pzstd, ["--quiet", "--check", toText f, "-o", toText t, "--rm"])
+      (exe,args) = compressor f t
+  null ← {- ж $ -} devnull -- @IOError
+  () ← traceShow ("pzstd",exe,args) $ snd ⊳ doProc {- @ProcError -} (return ()) null (uncurry mkCmd (exe,args))
+  return ()
+
+pzstd' ∷ File → File → IO ()
+pzstd' f t = join $ eToStderr' ⊳ (ѥ @ProcError $ pzstd f t)
+
+-- XXX  -rotate in reverse order-
+-- XXX  -separate rename from compress-
+-- XXX  -compress rotated files pzstd; handle extension-
+-- XXX  check threadID for completion: do not rotate if still compressing
 -- XXX  choose compressor
--- XXX  async compressor
+-- XXX  -async compressor-
 -- XXX  factor out compression
 -- XXX  always write to the name
+-- XXX  make compressor an IO job as input var (the rotator will fork it)
 fileSizeRotator ∷ ∀ σ ω μ . (MonadIO μ, σ ~ (𝔼 File ℍ,SizeBytes,Word16)) =>
-                  SizeBytes → CMode → Word16 → (Word16 → File) → σ → ω → 𝕋
-                → μ (Handle,σ)
-fileSizeRotator max_size file_mode max_files fngen (ɦ,bytes_written,x) sds t = do
+                  {- 𝕄 (PathComponent, IO()) → -} SizeBytes → CMode → Word16 → (Word16 → File)
+                → σ → ω → 𝕋 → μ (Handle,σ)
+fileSizeRotator {- compress' -} max_size file_mode max_files fngen (ɦ,bytes_written,x) sds t = do
   let compressor f t = (Paths.pzstd, ["--quiet", "--check", toText f, "-o", toText t, "--rm"])
-      comp_ext    = [pc|.zst|]
+      comp_ext    = [pc|zst|]
   let l           = SizeBytes (ɨ $ щ t) -- length of t
       bytes_would = bytes_written + l
-      fngen' i    = fngen i ⊙ comp_ext
+      compress' ∷ 𝕄 (File → File → IO(), PathComponent)
+      compress' = 𝓙 (pzstd', [pc|zst|])
+      -- fngen' i    = fngen i ⊙ comp_ext
+      fngen' i    = maybe id (\ e → (⊙ comp_ext)) (snd ⊳ compress') $ fngen i
       compress ∷ MonadIO μ' => PathComponent → File → File → ExceptT ProcError μ' ()
       compress ext f t = do
-        rename f t
+        -- rename f t
         let (exe,args) = compressor t (t ⊙ ext)
         null ← {- ж $ -} devnull -- @IOError
         () ← snd ⊳ doProc {- @ProcError -} (return ()) null (uncurry mkCmd (exe,args))
         return ()
---      forky_fork ∷ MonadIO μ => IO α → μ ()
---      forky_fork = liftIO ⩺ (const ()) ⩺ forkIO ∘ (const () ⊳)
       mkhandle    = traceShow ("ɦ", ɦ) $ do
         -- only compress when making the first archive file
-        let proto_moves = (either id (view hname) ɦ, fngen 0, 𝓙 comp_ext)
+        let proto_moves = (either id (view hname) ɦ, fngen 0, {- 𝓙 comp_ext -} compress')
                         : (uncurry (,,𝓝) ⊳
                           ((over both fngen')⊳zip [0..max_files] [1..max_files]))
         mv_files ← flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
           (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
-        liftIO $ forM_ mv_files $ \ (from,to,do_compress) → do
+        liftIO $ forM_ (reverse mv_files) $ \ (from,to,do_compress) → do
+          traceShow ("mv_file", (from,to)) $ ꙝ' $ rename @IOError from to
           case do_compress of
-            𝓝 → traceShow ("mv_files", (from,to)) $ (const 𝓝) ⊳ (ꙝ' $ rename @IOError from to)
-
-            𝓙 ext → traceShow ("compress", (from,to)) $ 𝓙 ⩺ forkIO ∘ join $ eToStderr' ⊳ (ѥ @ProcError $ do compress ext from to)
-        let fn = fngen x
+            𝓝 → return 𝓝
+            𝓙 (c,ext) → traceShow ("compress", (to,to⊙ext)) $ 𝓙 ⊳ {- forkAnyEStderr -} forkIO ({- ѥ @ProcError $ compress ext -} c to (to⊙ext))
+        let fn = either id (view hname) ɦ
             -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => File → μ ℍ
             open_file = ж ∘ openFile @IOError NoEncoding (FileW (𝓙 file_mode))
@@ -1032,7 +1056,7 @@ logToHandles hgen renderT renderEntry mbopts width st io = do
 
           -- XXX use PathComponent, possibly in conjunction with
           -- AbsFile.updateBasename, to make this safe
-          fngen = __parse'__ @AbsFile ∘ [fmt|/tmp/foo.%d.zst|]
+          -- fngen = __parse'__ @AbsFile ∘ [fmt|/tmp/foo.%d.zst|]
           -- hgen  = fileSizeRotator 10 fngen
 --       in fst ⊳ withFDHandler hgen renderT renderIO width bopts (𝓙 fh,0,0) handler
        in fst ⊳ withFDHandler hgen renderT renderIO width bopts ṡṫ handler
@@ -1058,7 +1082,7 @@ sizedHandle (w,h) = return (h,(w,h))
 
 {- | Write a log to a filehandle, generated at need, with given options but no
      adornments. -}
-logToHandlesNoAdornments ∷ (MonadIO μ, MonadMask μ) ⇒
+logToHandlesNoAdornments ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ) ⇒
                            (σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
                            -- ^ handle generator
                          → 𝕄 BatchingOptions
@@ -1114,9 +1138,10 @@ logToHandleAnsi bopts lro trx fh io =
 ----------------------------------------
 
 {- | Log to a regular file, with unbounded width. -}
-logToFile' ∷ (MonadIO μ, MonadMask μ) ⇒
-             [LogR ω] → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α → μ α
-logToFile' ls trx =
+logToFileHandleNoAdornments ∷ (MonadIO μ, MonadMask μ) ⇒
+                              [LogR ω] → [LogTransformer ω] → Handle
+                            → LoggingT (Log ω) μ α → μ α
+logToFileHandleNoAdornments ls trx =
   let lro = logRenderOpts' ls Unbounded
    in logToHandleNoAdornments (Just fileBatchingOptions) lro trx
 
@@ -1144,7 +1169,7 @@ logToFD' ls trx h io = do
   isatty ← liftIO $ hIsTerminalDevice h
   if isatty
   then logToTTY'  ls trx h io
-  else logToFile' ls trx h io
+  else logToFileHandleNoAdornments ls trx h io
 
 ----------------------------------------
 
@@ -1188,7 +1213,40 @@ stdRenderers FullCallStack =
 {- | Log to a plain file with given callstack choice, and given annotators. -}
 logToFile ∷ (MonadIO μ, MonadMask μ) ⇒
             CSOpt → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α → μ α
-logToFile cso trx = logToFile' (stdRenderers cso) trx
+logToFile cso trx =
+  logToFileHandleNoAdornments (stdRenderers cso) trx
+
+{-| run `io`, logging to rotating files -}
+logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, σ ~ (𝔼 File ℍ, SizeBytes, Word16)) =>
+             [LogR ω] → [LogTransformer ω]
+           → (σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
+           → File → LoggingT (Log ω) μ α → μ α
+logToFiles ls trx rt fn io =
+ let opts = Just fileBatchingOptions
+     lro  = logRenderOpts' ls Unbounded
+ in  logToHandlesNoAdornments rt opts lro trx (𝓛 fn,0,0) io
+
+{-| an instance of file rotator that defaults perms to 0o644, max files to 10, and
+    uses a pattern that appends numbers to the end of the filenames. -}
+-- XXX set the compressor
+simpleRotator ∷ ∀ ω μ . MonadIO μ =>
+                𝕄 Word16 → 𝕄 CMode → SizeBytes → File → (𝔼 File ℍ, SizeBytes, Word16) → ω → 𝕋
+              → μ (Handle, (𝔼 File ℍ, SizeBytes, Word16))
+simpleRotator max_files perms sz fn =
+  let numDigits ∷ (Integral α, Unsigned α) => α → I64
+      numDigits 0 = 1
+      numDigits n = countDigits n
+        where
+          countDigits 0 = 0
+          countDigits x = 1 + countDigits (x `div` 10)
+
+      padNumber ∷ I64 → I64 → 𝕊
+      padNumber n num = let str = show num in (replicate_ (n ⊟ щ str) '0') ◇ str
+
+      max_files' = max_files ⧏ 10
+      num = padNumber (numDigits max_files')
+  in  fileSizeRotator sz (perms ⧏ 0o644) max_files'
+                      ((fn ⊙) ∘ __parse'__ @PathComponent ∘ num ∘ fromIntegral)
 
 --------------------
 
