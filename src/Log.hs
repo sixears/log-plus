@@ -878,72 +878,59 @@ forkAnyEStderr io = forkIO ∘ join $ eToStderr' ⊳ io
 
 pzstd ∷ MonadIO μ => File → File → ExceptT ProcError μ ()
 pzstd f t = do
-  -- rename f t
-  let compressor f t = (Paths.pzstd, ["--quiet", "--check", toText f, "-o", toText t, "--rm"])
-      (exe,args) = compressor f t
-  null ← {- ж $ -} devnull -- @IOError
-  () ← traceShow ("pzstd",exe,args) $ snd ⊳ doProc {- @ProcError -} (return ()) null (uncurry mkCmd (exe,args))
+  let args = ["--quiet", "--check", toText f, "-o", toText t, "--rm"]
+      exe  = Paths.pzstd
+  null ← devnull
+  () ← snd ⊳ doProc (return ()) null (uncurry mkCmd (exe,args))
   return ()
 
 pzstd' ∷ File → File → IO ()
 pzstd' f t = join $ eToStderr' ⊳ (ѥ @ProcError $ pzstd f t)
 
--- XXX  -rotate in reverse order-
--- XXX  -separate rename from compress-
--- XXX  -compress rotated files pzstd; handle extension-
 -- XXX  check threadID for completion: do not rotate if still compressing
 -- XXX  choose compressor
 -- XXX  -async compressor-
 -- XXX  factor out compression
 -- XXX  always write to the name
 -- XXX  make compressor an IO job as input var (the rotator will fork it)
+
+-- XXX test with & without compressor.
+
 fileSizeRotator ∷ ∀ σ ω μ . (MonadIO μ, σ ~ (𝔼 File ℍ,SizeBytes,Word16)) =>
-                  {- 𝕄 (PathComponent, IO()) → -} SizeBytes → CMode → Word16 → (Word16 → File)
-                → σ → ω → 𝕋 → μ (Handle,σ)
-fileSizeRotator {- compress' -} max_size file_mode max_files fngen (ɦ,bytes_written,x) sds t = do
-  let compressor f t = (Paths.pzstd, ["--quiet", "--check", toText f, "-o", toText t, "--rm"])
-      comp_ext    = [pc|zst|]
+                  𝕄 (File → File → IO(), PathComponent) → SizeBytes → CMode → Word16
+                → (Word16 → File) → σ → ω → 𝕋 → μ (Handle,σ)
+fileSizeRotator compress max_size file_mode max_files fngen (ɦ,bytes_written,x) _sds t = do
+  let comp_ext    = [pc|zst|]
   let l           = SizeBytes (ɨ $ щ t) -- length of t
       bytes_would = bytes_written + l
-      compress' ∷ 𝕄 (File → File → IO(), PathComponent)
-      compress' = 𝓙 (pzstd', [pc|zst|])
-      -- fngen' i    = fngen i ⊙ comp_ext
-      fngen' i    = maybe id (\ e → (⊙ comp_ext)) (snd ⊳ compress') $ fngen i
-      compress ∷ MonadIO μ' => PathComponent → File → File → ExceptT ProcError μ' ()
-      compress ext f t = do
-        -- rename f t
-        let (exe,args) = compressor t (t ⊙ ext)
-        null ← {- ж $ -} devnull -- @IOError
-        () ← snd ⊳ doProc {- @ProcError -} (return ()) null (uncurry mkCmd (exe,args))
-        return ()
-      mkhandle    = traceShow ("ɦ", ɦ) $ do
+      -- compress' ∷ 𝕄 (File → File → IO(), PathComponent)
+      -- compress' = 𝓙 (pzstd', [pc|zst|])
+      fngen' i    = maybe id (\ e → (⊙ e)) (snd ⊳ compress) $ fngen i
+      mkhandle    = do
         -- only compress when making the first archive file
-        let proto_moves = (either id (view hname) ɦ, fngen 0, {- 𝓙 comp_ext -} compress')
+        let proto_moves = (either id (view hname) ɦ, fngen 0, compress)
                         : (uncurry (,,𝓝) ⊳
                           ((over both fngen')⊳zip [0..max_files] [1..max_files]))
         mv_files ← flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
           (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
         liftIO $ forM_ (reverse mv_files) $ \ (from,to,do_compress) → do
-          traceShow ("mv_file", (from,to)) $ ꙝ' $ rename @IOError from to
+          ꙝ' $ rename @IOError from to
           case do_compress of
             𝓝 → return 𝓝
-            𝓙 (c,ext) → traceShow ("compress", (to,to⊙ext)) $ 𝓙 ⊳ {- forkAnyEStderr -} forkIO ({- ѥ @ProcError $ compress ext -} c to (to⊙ext))
+            𝓙 (c,ext) → 𝓙 ⊳ forkIO (c to (to⊙ext))
         let fn = either id (view hname) ɦ
             -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => File → μ ℍ
             open_file = ж ∘ openFile @IOError NoEncoding (FileW (𝓙 file_mode))
-        traceShow ("mkhandle",bytes_written,l,x,fn) $ return ()
         open_file fn
   case ɦ of
     𝓡 𝕙 → if bytes_written ≠ 0 ∧ bytes_would > max_size
              -- XXX move old file; allow setting of perms
-          then do let new_fn = traceShow ("then") $ fngen x
-                  hClose 𝕙
-                  -- h ← ж $ openFile @_ @_ @IOError NoEncoding (FileW (𝓙 0o644)) new_fn
+          then do hClose 𝕙
                   𝕙' ← mkhandle
                   return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
-          else traceShow ("else") $ return (𝕙 ⊣ handle,(𝓡 𝕙,bytes_would,x))
-    𝓛 ħ → traceShow ("Lefty" ) $ mkhandle ≫ \ 𝕙' → return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
+          else return (𝕙 ⊣ handle,(𝓡 𝕙,bytes_would,x))
+    𝓛 ħ → mkhandle ≫ \ 𝕙' → return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
 
 ----------------------------------------
 
@@ -1072,14 +1059,6 @@ staticHandle h _ _ = return (h,h)
 
 ----------------------------------------
 
-newtype BytesWritten = BytesWritten Word64
-
-sizedHandle ∷ MonadIO μ =>
-              (BytesWritten,Handle) → μ (Handle,(BytesWritten,Handle))
-sizedHandle (w,h) = return (h,(w,h))
-
-----------------------------------------
-
 {- | Write a log to a filehandle, generated at need, with given options but no
      adornments. -}
 logToHandlesNoAdornments ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ) ⇒
@@ -1114,7 +1093,7 @@ logToHandleNoAdornments bopts lro trx h l = do
   -- XXX use PathComponent, possibly in conjunction with
   -- AbsFile.updateBasename, to make this safe
 --  𝕙 ← ж $ openFile @_ @_ @IOError NoEncoding (FileW (𝓙 0o644)) [absfile|/tmp/bax|]
-  logToHandlesNoAdornments (fileSizeRotator 10 0o644 10 (__parse'__ @File ∘ [fmt|/tmp/foo.%d|])) bopts lro trx (𝓛 (FileA [absfile|/tmp/bax|]),0,0) l
+  logToHandlesNoAdornments (fileSizeRotator (𝓙 (pzstd', [pc|zst|])) 10 0o644 10 (__parse'__ @File ∘ [fmt|/tmp/foo.%d|])) bopts lro trx (𝓛 (FileA [absfile|/tmp/bax|]),0,0) l
 
 --------------------
 
@@ -1226,9 +1205,13 @@ logToFiles ls trx rt fn io =
      lro  = logRenderOpts' ls Unbounded
  in  logToHandlesNoAdornments rt opts lro trx (𝓛 fn,0,0) io
 
+compressPzstd ∷ (File → File → IO (), PathComponent)
+compressPzstd = (pzstd', [pc|zst|])
+
 {-| an instance of file rotator that defaults perms to 0o644, max files to 10, and
     uses a pattern that appends numbers to the end of the filenames. -}
 -- XXX set the compressor
+-- XXX while duplicate the file name?
 simpleRotator ∷ ∀ ω μ . MonadIO μ =>
                 𝕄 Word16 → 𝕄 CMode → SizeBytes → File → (𝔼 File ℍ, SizeBytes, Word16) → ω → 𝕋
               → μ (Handle, (𝔼 File ℍ, SizeBytes, Word16))
@@ -1241,11 +1224,11 @@ simpleRotator max_files perms sz fn =
           countDigits x = 1 + countDigits (x `div` 10)
 
       padNumber ∷ I64 → I64 → 𝕊
-      padNumber n num = let str = show num in (replicate_ (n ⊟ щ str) '0') ◇ str
+      padNumber p n = let str = show n in (replicate_ (p ⊟ щ str) '0') ◇ str
 
       max_files' = max_files ⧏ 10
       num = padNumber (numDigits max_files')
-  in  fileSizeRotator sz (perms ⧏ 0o644) max_files'
+  in  fileSizeRotator {- (𝓙 compressPzstd) -} 𝓝 sz (perms ⧏ 0o644) max_files'
                       ((fn ⊙) ∘ __parse'__ @PathComponent ∘ num ∘ fromIntegral)
 
 --------------------
