@@ -891,7 +891,7 @@ fileSizeRotator compress max_size file_mode max_files fngen (ɦ,bytes_written,x)
   let l           = SizeBytes (ɨ $ щ t) -- length of t
       bytes_would = bytes_written + l
       fngen' i    = maybe id (\ e → (⊙ e)) (snd ⊳ compress) $ fngen i
-      mkhandle    = do
+      mkhandle fn = do
         -- only compress when making the first archive file
         let proto_moves = (either id (view hname) ɦ, fngen 0, compress)
                         : (uncurry (,,𝓝) ⊳
@@ -903,19 +903,18 @@ fileSizeRotator compress max_size file_mode max_files fngen (ɦ,bytes_written,x)
           case do_compress of
             𝓝 → return 𝓝
             𝓙 (c,ext) → 𝓙 ⊳ forkIO (c to (to⊙ext))
-        let fn = either id (view hname) ɦ
-            -- open a file, mode 0644, raise if it fails
+        let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => File → μ ℍ
             open_file = ж ∘ openFile @IOError NoEncoding (FileW (𝓙 file_mode))
         open_file fn
   case ɦ of
     𝓡 𝕙 → if bytes_written ≠ 0 ∧ bytes_would > max_size
-             -- XXX move old file; allow setting of perms
+          -- XXX move old file; allow setting of perms
           then do hClose 𝕙
-                  𝕙' ← mkhandle
+                  𝕙' ← mkhandle (𝕙 ⊣ hname)
                   return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
           else return (𝕙 ⊣ handle,(𝓡 𝕙,bytes_would,x))
-    𝓛 ħ → mkhandle ≫ \ 𝕙' → return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
+    𝓛 ħ → mkhandle ħ ≫ \ 𝕙' → return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
 
 ----------------------------------------
 
