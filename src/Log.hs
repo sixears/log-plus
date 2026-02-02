@@ -19,20 +19,18 @@ module Log
   , tests, _log0, _log0m, _log1, _log1m )
 where
 
-import Debug.Trace  ( traceShow )
-
 -- base --------------------------------
 
 import qualified Control.Concurrent.MVar  as  MVar
 import qualified  Data.Foldable           as  Foldable
 
 import Control.Applicative      ( Applicative( (<*>), pure ) )
-import Control.Concurrent       ( ThreadId, forkIO, threadDelay )
+import Control.Concurrent       ( forkIO, threadDelay )
 import Control.Monad            ( Monad, (>>=), forM_, join, return )
 import Control.Monad.IO.Class   ( MonadIO, liftIO )
-import Data.Bool                ( Bool( True ), otherwise )
+import Data.Bool                ( Bool( True ) )
 import Data.Either              ( either )
-import Data.Eq                  ( Eq( (==) ) )
+import Data.Eq                  ( Eq )
 import Data.Foldable            ( Foldable, all, concatMap, foldl', foldl1
                                 , foldMap, foldr, foldr1 )
 import Data.Function            ( ($), (&), const, flip, id )
@@ -41,7 +39,7 @@ import Data.List                ( reverse, zip )
 import Data.List.NonEmpty       ( NonEmpty( (:|) ), nonEmpty )
 import Data.Maybe               ( Maybe( Just, Nothing ), catMaybes, maybe )
 import Data.Monoid              ( Monoid )
-import Data.Ord                 ( Ord, (>), (<), (<=) )
+import Data.Ord                 ( Ord, (>) )
 import Data.Semigroup           ( Semigroup )
 import Data.String              ( String )
 import Data.Tuple               ( fst, snd, uncurry )
@@ -49,7 +47,7 @@ import Data.Word                ( Word16, Word64 )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( Item, fromList, toList ) )
 import GHC.Generics             ( Generic )
-import GHC.Num                  ( Num, (+), (-) )
+import GHC.Num                  ( Num, (+) )
 import GHC.Real                 ( Integral, Real, div, fromIntegral )
 import GHC.Stack                ( CallStack )
 import System.Exit              ( ExitCode )
@@ -87,8 +85,8 @@ import Control.Monad.Catch  ( MonadMask )
 
 -- fpath -------------------------------
 
-import FPath.AbsFile        ( AbsFile, absfile )
-import FPath.File           ( File( FileA ) )
+import FPath.AbsFile        ( absfile )
+import FPath.File           ( File )
 import FPath.FileLike       ( (⊙) )
 import FPath.Parseable      ( __parse'__ )
 import FPath.PathComponent  ( PathComponent, pc )
@@ -150,7 +148,7 @@ import Data.MoreUnicode.Text         ( 𝕋 )
 
 -- mtl ---------------------------------
 
-import Control.Monad.Except    ( ExceptT, MonadError )
+import Control.Monad.Except    ( ExceptT )
 import Control.Monad.Identity  ( runIdentity )
 
 -- natural -----------------------------
@@ -217,10 +215,6 @@ import Data.Text.IO  ( hPutStr, hPutStrLn )
 -- text-printer ------------------------
 
 import qualified  Text.Printer  as  P
-
--- tfmt --------------------------------
-
-import Text.Fmt  ( fmt )
 
 -- time --------------------------------
 
@@ -870,12 +864,6 @@ takeWhileM ∷ Monad m => (a → m Bool) → [a] → m [a]
 takeWhileM _ []     = return []
 takeWhileM p (x:xs) = p x ≫ \ b → if b then (x:) ⊳ takeWhileM p xs else return []
 
-data DoCompress = DoCompress | DoNotCompress
-
-{-| fork some IO; echo any issues to stderr, ignore any return value -}
-forkAnyEStderr ∷ Printable ε => IO (𝔼 ε α) → IO ThreadId
-forkAnyEStderr io = forkIO ∘ join $ eToStderr' ⊳ io
-
 pzstd ∷ MonadIO μ => File → File → ExceptT ProcError μ ()
 pzstd f t = do
   let args = ["--quiet", "--check", toText f, "-o", toText t, "--rm"]
@@ -900,11 +888,8 @@ fileSizeRotator ∷ ∀ σ ω μ . (MonadIO μ, σ ~ (𝔼 File ℍ,SizeBytes,Wo
                   𝕄 (File → File → IO(), PathComponent) → SizeBytes → CMode → Word16
                 → (Word16 → File) → σ → ω → 𝕋 → μ (Handle,σ)
 fileSizeRotator compress max_size file_mode max_files fngen (ɦ,bytes_written,x) _sds t = do
-  let comp_ext    = [pc|zst|]
   let l           = SizeBytes (ɨ $ щ t) -- length of t
       bytes_would = bytes_written + l
-      -- compress' ∷ 𝕄 (File → File → IO(), PathComponent)
-      -- compress' = 𝓙 (pzstd', [pc|zst|])
       fngen' i    = maybe id (\ e → (⊙ e)) (snd ⊳ compress) $ fngen i
       mkhandle    = do
         -- only compress when making the first archive file
@@ -1085,15 +1070,7 @@ logToHandleNoAdornments ∷ (MonadIO μ, MonadMask μ) ⇒
                         → Handle
                         → LoggingT (Log ω) μ α
                         → μ α
--- XXX temporary for testing handle alterAnnotations
--- XXX temorary ignore incoming filehandle to test that
-
--- logToHandleNoAdornments = logToHandlesNoAdornments staticHandle
-logToHandleNoAdornments bopts lro trx h l = do
-  -- XXX use PathComponent, possibly in conjunction with
-  -- AbsFile.updateBasename, to make this safe
---  𝕙 ← ж $ openFile @_ @_ @IOError NoEncoding (FileW (𝓙 0o644)) [absfile|/tmp/bax|]
-  logToHandlesNoAdornments (fileSizeRotator (𝓙 (pzstd', [pc|zst|])) 10 0o644 10 (__parse'__ @File ∘ [fmt|/tmp/foo.%d|])) bopts lro trx (𝓛 (FileA [absfile|/tmp/bax|]),0,0) l
+logToHandleNoAdornments = logToHandlesNoAdornments staticHandle
 
 --------------------
 
@@ -1208,8 +1185,9 @@ logToFiles ls trx rt fn io =
 compressPzstd ∷ (File → File → IO (), PathComponent)
 compressPzstd = (pzstd', [pc|zst|])
 
-{-| an instance of file rotator that defaults perms to 0o644, max files to 10, and
-    uses a pattern that appends numbers to the end of the filenames. -}
+{-| an instance of file rotator that defaults perms to 0o644, max files to 10,
+    uses a pattern that appends numbers to the end of the filenames, and compresses
+    archive files with pzstd -}
 -- XXX set the compressor
 -- XXX while duplicate the file name?
 simpleRotator ∷ ∀ ω μ . MonadIO μ =>
@@ -1228,7 +1206,7 @@ simpleRotator max_files perms sz fn =
 
       max_files' = max_files ⧏ 10
       num = padNumber (numDigits max_files')
-  in  fileSizeRotator {- (𝓙 compressPzstd) -} 𝓝 sz (perms ⧏ 0o644) max_files'
+  in  fileSizeRotator (𝓙 compressPzstd) sz (perms ⧏ 0o644) max_files'
                       ((fn ⊙) ∘ __parse'__ @PathComponent ∘ num ∘ fromIntegral)
 
 --------------------
