@@ -37,7 +37,7 @@ import Data.Text.IO  ( getLine )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log  ( info', logToFiles, simpleRotator )
+import Log  ( info', logToFiles, simpleSizeRotator )
 
 --------------------------------------------------------------------------------
 
@@ -77,7 +77,7 @@ main = do
   let log_renderers    = []
       log_transformers = []
   -- XXX why duplicate the file name?
-      rotator          = simpleRotator (𝓙 10) (𝓙 0o644) 10 (FileA fn)
+      rotator          = simpleSizeRotator (𝓙 10) (𝓙 0o644) 10 (FileA fn)
   logToFiles log_renderers log_transformers rotator (FileA fn) $
     forever (liftIO getLine ≫ info' @())
 
