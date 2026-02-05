@@ -14,7 +14,7 @@ module Log
   , logToStderr'
   , stackOptions, stackParses, stdRenderers
   , logFilter, mapLog, mapLogE
-  , simpleRotator
+  , simpleSizeRotator
   -- test data
   , tests, _log0, _log0m, _log1, _log1m )
 where
@@ -25,8 +25,8 @@ import qualified Control.Concurrent.MVar  as  MVar
 import qualified  Data.Foldable           as  Foldable
 
 import Control.Applicative      ( Applicative( (<*>), pure ) )
-import Control.Concurrent       ( forkIO, threadDelay )
-import Control.Monad            ( Monad, (>>=), forM_, join, return )
+import Control.Concurrent       ( ThreadId, forkIO, threadDelay )
+import Control.Monad            ( Monad, (>>=), forM, forM_, join, return )
 import Control.Monad.IO.Class   ( MonadIO, liftIO )
 import Data.Bool                ( Bool( True ) )
 import Data.Either              ( either )
@@ -35,7 +35,7 @@ import Data.Foldable            ( Foldable, all, concatMap, foldl', foldl1
                                 , foldMap, foldr, foldr1 )
 import Data.Function            ( ($), (&), const, flip, id )
 import Data.Functor             ( Functor, fmap )
-import Data.List                ( reverse, zip )
+import Data.List                ( and, reverse, zip )
 import Data.List.NonEmpty       ( NonEmpty( (:|) ), nonEmpty )
 import Data.Maybe               ( Maybe( Just, Nothing ), catMaybes, maybe )
 import Data.Monoid              ( Monoid )
@@ -44,6 +44,8 @@ import Data.Semigroup           ( Semigroup )
 import Data.String              ( String )
 import Data.Tuple               ( fst, snd, uncurry )
 import Data.Word                ( Word16, Word64 )
+import GHC.Conc.Sync            ( ThreadStatus( ThreadBlocked, ThreadDied, ThreadFinished
+                                              , ThreadRunning ), threadStatus )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( Item, fromList, toList ) )
 import GHC.Generics             ( Generic )
@@ -875,46 +877,64 @@ pzstd f t = do
 pzstd' ∷ File → File → IO ()
 pzstd' f t = join $ eToStderr' ⊳ (ѥ @ProcError $ pzstd f t)
 
--- XXX  check threadID for completion: do not rotate if still compressing
--- XXX  choose compressor
--- XXX  -async compressor-
--- XXX  factor out compression
 -- XXX  always write to the name
--- XXX  make compressor an IO job as input var (the rotator will fork it)
 
--- XXX test with & without compressor.
+data ThreadIsRunning = ThreadIsRunning | ThreadIsNotRunning
+  deriving (Eq, Show)
 
-fileSizeRotator ∷ ∀ σ ω μ . (MonadIO μ, σ ~ (𝔼 File ℍ,SizeBytes,Word16)) =>
+threadIsRunning ∷ ThreadId → IO ThreadIsRunning
+threadIsRunning tid = threadStatus tid ≫ \ case
+                        ThreadRunning   → return ThreadIsRunning
+                        ThreadFinished  → return ThreadIsNotRunning
+                        ThreadBlocked _ → return ThreadIsRunning
+                        ThreadDied      → return ThreadIsNotRunning
+
+fileSizeRotator ∷ ∀ σ ω μ . (MonadIO μ, σ ~ (𝔼 File ℍ,SizeBytes,Word16,𝕄 ThreadId)) =>
                   𝕄 (File → File → IO(), PathComponent) → SizeBytes → CMode → Word16
                 → (Word16 → File) → σ → ω → 𝕋 → μ (Handle,σ)
-fileSizeRotator compress max_size file_mode max_files fngen (ɦ,bytes_written,x) _sds t = do
+fileSizeRotator compress max_size file_perms max_files fngen (ɦ,bytes_written,x,tid) _sds t = do
   let l           = SizeBytes (ɨ $ щ t) -- length of t
       bytes_would = bytes_written + l
       fngen' i    = maybe id (\ e → (⊙ e)) (snd ⊳ compress) $ fngen i
+      mkhandle    ∷ File → μ (ℍ, 𝕄 ThreadId)
       mkhandle fn = do
         -- only compress when making the first archive file
-        let proto_moves = (either id (view hname) ɦ, fngen 0, compress)
-                        : (uncurry (,,𝓝) ⊳
-                          ((over both fngen')⊳zip [0..max_files] [1..max_files]))
+        let proto_moves =
+              let fn_pairs    = (over both fngen') ⊳ zip [0..max_files] [1..max_files]
+                  init_fnpair = (either id (view hname) ɦ, fngen 0, compress)
+              in  init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
         mv_files ← flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
           (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
-        liftIO $ forM_ (reverse mv_files) $ \ (from,to,do_compress) → do
-          ꙝ' $ rename @IOError from to
-          case do_compress of
-            𝓝 → return 𝓝
-            𝓙 (c,ext) → 𝓙 ⊳ forkIO (c to (to⊙ext))
+        let m1 []          = 𝓝
+            m1 ((𝓙 x) : _) = 𝓙 x
+            m1 (𝓝 : xs)   = m1 xs
+            mv_compress ∷ (File,File,𝕄 (File → File → IO(),PathComponent)) → IO (𝕄 ThreadId)
+            mv_compress (from,to,do_compress) = do
+              ꙝ' $ rename @IOError from to
+              case do_compress of
+                𝓝 → return 𝓝
+                𝓙 (c,ext) → 𝓙 ⊳ forkIO (c to (to⊙ext))
+        tid' ← liftIO $ m1 ⊳ forM (reverse mv_files) mv_compress
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => File → μ ℍ
-            open_file = ж ∘ openFile @IOError NoEncoding (FileW (𝓙 file_mode))
-        open_file fn
+            open_file = ж ∘ openFile @IOError NoEncoding (FileW (𝓙 file_perms))
+        ẖ ∷ ℍ ← open_file fn
+        return (ẖ, tid')
+
+  threadRunning ← liftIO $ case tid of
+                    𝓝   → return ThreadIsNotRunning
+                    𝓙 t → threadIsRunning t
   case ɦ of
-    𝓡 𝕙 → if bytes_written ≠ 0 ∧ bytes_would > max_size
-          -- XXX move old file; allow setting of perms
-          then do hClose 𝕙
-                  𝕙' ← mkhandle (𝕙 ⊣ hname)
-                  return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
-          else return (𝕙 ⊣ handle,(𝓡 𝕙,bytes_would,x))
-    𝓛 ħ → mkhandle ħ ≫ \ 𝕙' → return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1))
+    𝓡 𝕙 → if and [ threadRunning ≠ ThreadIsRunning
+                 , bytes_written ≠ 0
+                 , bytes_would > max_size
+                 ]
+          then do -- time to make a new handle
+            hClose 𝕙
+            (𝕙',ṯ) ← mkhandle (𝕙 ⊣ hname)
+            return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1,ṯ))
+          else return (𝕙 ⊣ handle,(𝓡 𝕙,bytes_would,x,tid))
+    𝓛 ħ → mkhandle ħ ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1,ṯ))
 
 ----------------------------------------
 
@@ -1172,14 +1192,22 @@ logToFile cso trx =
   logToFileHandleNoAdornments (stdRenderers cso) trx
 
 {-| run `io`, logging to rotating files -}
-logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, σ ~ (𝔼 File ℍ, SizeBytes, Word16)) =>
-             [LogR ω] → [LogTransformer ω]
-           → (σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
-           → File → LoggingT (Log ω) μ α → μ α
+-- XXX can we generalize σ here, i.e., not specify it with ~ ?
+logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, σ ~ (𝔼 File ℍ, SizeBytes, Word16, 𝕄 ThreadId)) =>
+             [LogR ω]                                             -- ^ trx
+           → [LogTransformer ω]                                   -- ^ ls
+           → (σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ)) -- ^ rt (rotator)
+           -- XXX this is used for the initial state of the rotator...
+           --     can we do better, e.g., have the rotator give us the initial name?
+           → File                                                 -- ^ fn
+           → LoggingT (Log ω) μ α                                 -- ^ io
+           → μ α
 logToFiles ls trx rt fn io =
  let opts = Just fileBatchingOptions
      lro  = logRenderOpts' ls Unbounded
- in  logToHandlesNoAdornments rt opts lro trx (𝓛 fn,0,0) io
+ in  -- XXX can we avoid initializing the state here, which is dependent on the
+     --     rotator/compressor?
+     logToHandlesNoAdornments rt opts lro trx (𝓛 fn,0,0,𝓝) io
 
 compressPzstd ∷ (File → File → IO (), PathComponent)
 compressPzstd = (pzstd', [pc|zst|])
@@ -1189,10 +1217,12 @@ compressPzstd = (pzstd', [pc|zst|])
     archive files with pzstd -}
 -- XXX set the compressor
 -- XXX while duplicate the file name?
-simpleRotator ∷ ∀ ω μ . MonadIO μ =>
-                𝕄 Word16 → 𝕄 CMode → SizeBytes → File → (𝔼 File ℍ, SizeBytes, Word16) → ω → 𝕋
-              → μ (Handle, (𝔼 File ℍ, SizeBytes, Word16))
-simpleRotator max_files perms sz fn =
+-- XXX that initial state seems like it should be generated by simpleSizeRotator
+simpleSizeRotator ∷ ∀ ω μ . MonadIO μ =>
+                    𝕄 Word16 → 𝕄 CMode → SizeBytes → File
+                  → (𝔼 File ℍ, SizeBytes, Word16, 𝕄 ThreadId) → ω → 𝕋
+                  → μ (Handle, (𝔼 File ℍ, SizeBytes, Word16, 𝕄 ThreadId))
+simpleSizeRotator max_files perms sz fn =
   let numDigits ∷ (Integral α, Unsigned α) => α → I64
       numDigits 0 = 1
       numDigits n = countDigits n
