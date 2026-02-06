@@ -26,10 +26,11 @@ import qualified  Data.Foldable           as  Foldable
 
 import Control.Applicative      ( Applicative( (<*>), pure ) )
 import Control.Concurrent       ( ThreadId, forkIO, threadDelay )
+import Control.Concurrent.MVar  ( MVar, tryReadMVar, newEmptyMVar, newMVar, readMVar
+                                , swapMVar )
 import Control.Monad            ( Monad, (>>=), forM, forM_, join, return )
 import Control.Monad.IO.Class   ( MonadIO, liftIO )
 import Data.Bool                ( Bool( True ) )
-import Data.Either              ( either )
 import Data.Eq                  ( Eq )
 import Data.Foldable            ( Foldable, all, concatMap, foldl', foldl1
                                 , foldMap, foldr, foldr1 )
@@ -186,7 +187,7 @@ import Prettyprinter.Render.Terminal  ( AnsiStyle )
 
 -- safe --------------------------------
 
-import Safe  ( headDef )
+import Safe  ( headDef, tailSafe )
 
 -- single ------------------------------
 
@@ -802,6 +803,7 @@ whenJust io (Just y) = io y
 
 ------------------------------------------------------------
 
+{-
 newtype NonEmptyMVar α = NonEmptyMVar { getMVar ∷ MVar.MVar α }
 
 newMVar ∷ α → MonadIO μ => μ (NonEmptyMVar α)
@@ -821,12 +823,13 @@ setMVar ∷ MonadIO μ => NonEmptyMVar α → α → μ ()
 -- would happen if we used take-then-put); and that the function doesn't stall
 -- (which would happen when the mvar is full, i.e., always)
 setMVar mvar val = swapMVar mvar val ⪼ return ()
+-}
 
 ------------------------------------------------------------
 
 flusher ∷ ∀ δ σ ρ ψ μ . (MonadIO μ, Foldable ψ) => -- δ is, e.g., Handle
-          (σ → 𝕋 → μ (δ,σ))               -- ^ handle generator
-        → NonEmptyMVar σ                  -- ^ incoming handle state
+          (𝕄 σ → 𝕋 → μ (δ,σ))               -- ^ handle generator
+        → MVar σ                  -- ^ incoming handle state
         → (SimpleDocStream ρ → 𝕋)         -- ^ render SimpleDocStream ρ to 𝕋
 --        → (δ → SimpleDocStream ρ → μ ())  -- ^ write messages to log
         → (δ → 𝕋 → μ ())  -- ^ write messages to log
@@ -839,9 +842,9 @@ flusher hgen stvar renderT r pw messages = do
                                (vsep (Foldable.toList ms) ⊕ line')
       sds = layout messages
       t   = renderT sds
-  st ← liftIO$ readMVar stvar
+  st ← liftIO$ tryReadMVar stvar
   (h,st') ← hgen st t
-  liftIO $ setMVar stvar st'
+  _ ← liftIO $ swapMVar stvar st'
   -- XXX
   r h t
 
@@ -877,10 +880,12 @@ pzstd f t = do
 pzstd' ∷ File → File → IO ()
 pzstd' f t = join $ eToStderr' ⊳ (ѥ @ProcError $ pzstd f t)
 
--- XXX  always write to the name
+------------------------------------------------------------
 
 data ThreadIsRunning = ThreadIsRunning | ThreadIsNotRunning
   deriving (Eq, Show)
+
+------------------------------------------------------------
 
 threadIsRunning ∷ ThreadId → IO ThreadIsRunning
 threadIsRunning tid = threadStatus tid ≫ \ case
@@ -889,19 +894,23 @@ threadIsRunning tid = threadStatus tid ≫ \ case
                         ThreadBlocked _ → return ThreadIsRunning
                         ThreadDied      → return ThreadIsNotRunning
 
-fileSizeRotator ∷ ∀ σ ω μ . (MonadIO μ, σ ~ (𝔼 File ℍ,SizeBytes,Word16,𝕄 ThreadId)) =>
+-- XXX test with & without compressor.
+
+fileSizeRotator ∷ ∀ ω μ σ . (MonadIO μ, σ ~ (𝕄 ℍ,SizeBytes,𝕄 ThreadId)) =>
                   𝕄 (File → File → IO(), PathComponent) → SizeBytes → CMode → Word16
-                → (Word16 → File) → σ → ω → 𝕋 → μ (Handle,σ)
-fileSizeRotator compress max_size file_perms max_files fngen (ɦ,bytes_written,x,tid) _sds t = do
-  let l           = SizeBytes (ɨ $ щ t) -- length of t
+                → (𝕄 Word16 → File) → 𝕄 σ → ω → 𝕋 → μ (Handle,σ)
+fileSizeRotator compress max_size file_perms max_files fngen st_ _sds t = do
+  let (ɦ,bytes_written,tid) = st_ ⧏ (𝓝,0,𝓝)
+      l           = SizeBytes (ɨ $ щ t) -- length of t
       bytes_would = bytes_written + l
       fngen' i    = maybe id (\ e → (⊙ e)) (snd ⊳ compress) $ fngen i
-      mkhandle    ∷ File → μ (ℍ, 𝕄 ThreadId)
-      mkhandle fn = do
+      mkhandle    ∷ μ (ℍ, 𝕄 ThreadId)
+      mkhandle    = do
         -- only compress when making the first archive file
         let proto_moves =
-              let fn_pairs    = (over both fngen') ⊳ zip [0..max_files] [1..max_files]
-                  init_fnpair = (either id (view hname) ɦ, fngen 0, compress)
+              let fn_nums     = 𝓙 ⊳ [0..max_files]
+                  fn_pairs    = (over both fngen') ⊳ zip fn_nums (tailSafe fn_nums)
+                  init_fnpair = (maybe (fngen 𝓝) (view hname) ɦ, fngen (𝓙 0), compress)
               in  init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
         mv_files ← flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
           (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
@@ -918,36 +927,37 @@ fileSizeRotator compress max_size file_perms max_files fngen (ɦ,bytes_written,x
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => File → μ ℍ
             open_file = ж ∘ openFile @IOError NoEncoding (FileW (𝓙 file_perms))
-        ẖ ∷ ℍ ← open_file fn
+        ẖ ∷ ℍ ← open_file (fngen 𝓝)
         return (ẖ, tid')
 
   threadRunning ← liftIO $ case tid of
                     𝓝   → return ThreadIsNotRunning
-                    𝓙 t → threadIsRunning t
+                    𝓙 ŧ → threadIsRunning ŧ
   case ɦ of
-    𝓡 𝕙 → if and [ threadRunning ≠ ThreadIsRunning
+    𝓙 𝕙 → if and [ threadRunning ≠ ThreadIsRunning
                  , bytes_written ≠ 0
                  , bytes_would > max_size
                  ]
           then do -- time to make a new handle
             hClose 𝕙
-            (𝕙',ṯ) ← mkhandle (𝕙 ⊣ hname)
-            return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1,ṯ))
-          else return (𝕙 ⊣ handle,(𝓡 𝕙,bytes_would,x,tid))
-    𝓛 ħ → mkhandle ħ ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle,(𝓡 𝕙',l,x+1,ṯ))
+            (𝕙',ṯ) ← mkhandle
+            return (𝕙' ⊣ handle,(𝓙 𝕙',l,ṯ))
+          else return (𝕙 ⊣ handle,(𝓙 𝕙,bytes_would,tid))
+    𝓝   → mkhandle ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle,(𝓙 𝕙',l,ṯ))
 
 ----------------------------------------
 
 {- | Write to an FD with given options, using `withBatchedHandler`.
      Each log entry is vertically separated.
  -}
+-- XXX document the arguments
 withFDHandler ∷ ∀ α δ σ ρ μ . (MonadIO μ, MonadMask μ) ⇒
-               (σ → SimpleDocStream ρ → 𝕋 → IO (δ,σ))
+               (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (δ,σ))
              → (SimpleDocStream ρ → 𝕋)
              → (δ → 𝕋 → IO())
              → PageWidth
              → BatchingOptions
-             → σ
+             → 𝕄 σ
              → (Handler μ (Doc ρ) → μ α) -- A.K.A, (Doc ρ → μ ()) → μ α
              → μ (α,σ)
 
@@ -956,14 +966,14 @@ withFDHandler hgen renderT r pw bopts st handler = do
   -- tracing it, it clearly doesn't.  I don't know why, I guess it's something
   -- to do with the construction of monadlog: but I don't seem to need to worry
   -- about the cost of creating new mvars
-  stvar ← newMVar st
+  stvar ∷ MVar σ ← liftIO $ maybe newEmptyMVar newMVar st
   let layout ∷ Foldable ψ ⇒ ψ (Doc π) → SimpleDocStream π
       layout ms = layoutPretty (LayoutOptions pw)
                                (vsep (Foldable.toList ms) ⊕ line')
       -- flush ∷ Foldable ψ ⇒ ψ (Doc ρ) → IO ()
       flush ms = flusher (\ ṡ t → hgen ṡ (layout ms) t) stvar renderT r pw ms
   a ← withBatchedHandler bopts flush handler
-  st' ← readMVar stvar
+  st' ← liftIO $ readMVar stvar
   return (a,st')
 
 ----------------------------------------
@@ -1024,18 +1034,17 @@ ttyBatchingOptions = BatchingOptions { flushMaxDelay     = 2_000
     The handle is created by a generator function, which may keep state.
 -}
 logToHandles ∷ ∀ α σ ρ ω μ  . (MonadIO μ, MonadMask μ) =>
-               (σ → SimpleDocStream ρ → 𝕋 → IO (Handle, σ)) -- ^ handle generator
+               (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (Handle, σ)) -- ^ handle generator
              → (SimpleDocStream ρ → 𝕋)
              → (LogEntry ω → 𝕄 (Doc ρ)) -- ^ render a LogEntry
              → 𝕄 BatchingOptions
              → PageWidth
-             → σ
              → LoggingT (Log ω) μ α
              → μ (α,σ)
 
-logToHandles hgen renderT renderEntry mbopts width st io = do
+logToHandles hgen renderT renderEntry mbopts width io = do
   let renderIO h t = hPutStr h t ⪼ hFlush h -- ∷ Handle→ SimpleDocStream ρ →IO()
-  (fh,ṡṫ) ← liftIO $ hgen st SEmpty ""
+  (fh,ṡṫ) ← liftIO $ hgen 𝓝 SEmpty ""
   a ← case mbopts of
     𝓝       → withSimpleHandler renderT width fh renderIO renderEntry io
     𝓙 bopts →
@@ -1050,7 +1059,7 @@ logToHandles hgen renderT renderEntry mbopts width st io = do
           -- fngen = __parse'__ @AbsFile ∘ [fmt|/tmp/foo.%d.zst|]
           -- hgen  = fileSizeRotator 10 fngen
 --       in fst ⊳ withFDHandler hgen renderT renderIO width bopts (𝓙 fh,0,0) handler
-       in fst ⊳ withFDHandler hgen renderT renderIO width bopts ṡṫ handler
+       in fst ⊳ withFDHandler hgen renderT renderIO width bopts (𝓙 ṡṫ) handler
   return (a,ṡṫ)
 
 ----------------------------------------
@@ -1058,26 +1067,24 @@ logToHandles hgen renderT renderEntry mbopts width st io = do
 {-| simple handle generator for use with logToHandles, that always uses a single
     filehandle -}
 staticHandle ∷ ∀ ρ μ . MonadIO μ =>
-               Handle → SimpleDocStream ρ → 𝕋 → μ (Handle,Handle)
-staticHandle h _ _ = return (h,h)
+               Handle → 𝕄 Handle → SimpleDocStream ρ → 𝕋 → μ (Handle,Handle)
+staticHandle h _ _ _ = return (h,h)
 
 ----------------------------------------
 
 {- | Write a log to a filehandle, generated at need, with given options but no
      adornments. -}
 logToHandlesNoAdornments ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ) ⇒
-                           (σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
+                           (𝕄 σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
                            -- ^ handle generator
                          → 𝕄 BatchingOptions
                          → LogRenderOpts ω
                          → [LogTransformer ω]
-                         → σ
                          → LoggingT (Log ω) μ α
                          → μ α
-logToHandlesNoAdornments hgen bopts lro trx st io =
+logToHandlesNoAdornments hgen bopts lro trx io =
   fst ⊳ logToHandles hgen RenderText.renderStrict
-                     (renderMapLog' (lroRenderer lro) trx) bopts (lro ⊣ lroWidth)
-                     st io
+                     (renderMapLog' (lroRenderer lro) trx) bopts (lro ⊣ lroWidth) io
 
 --------------------
 
@@ -1089,7 +1096,8 @@ logToHandleNoAdornments ∷ (MonadIO μ, MonadMask μ) ⇒
                         → Handle
                         → LoggingT (Log ω) μ α
                         → μ α
-logToHandleNoAdornments = logToHandlesNoAdornments staticHandle
+logToHandleNoAdornments bopts lro trx h =
+  logToHandlesNoAdornments (staticHandle h) bopts  lro trx
 
 --------------------
 
@@ -1101,14 +1109,12 @@ logToHandleAnsi ∷ (MonadIO μ, MonadMask μ) ⇒
                 → Handle
                 → LoggingT (Log ω) μ α
                 → μ α
-logToHandleAnsi bopts lro trx fh io =
-  fst ⊳ logToHandles staticHandle
-                     (Data.Text.Lazy.toStrict ∘ RenderTerminal.renderLazy)
-                     (renderMapLog' (lroRenderer lro) trx)
-                     bopts
-                     (lro ⊣ lroWidth)
-                     fh
-                     io
+logToHandleAnsi bopts lro trx h io =
+  let hgen = staticHandle h
+      renderT     = Data.Text.Lazy.toStrict ∘ RenderTerminal.renderLazy
+      renderEntry = renderMapLog' (lroRenderer lro) trx
+      width       = lro ⊣ lroWidth
+  in  fst ⊳ logToHandles hgen renderT renderEntry bopts width io
 
 ----------------------------------------
 
@@ -1193,21 +1199,21 @@ logToFile cso trx =
 
 {-| run `io`, logging to rotating files -}
 -- XXX can we generalize σ here, i.e., not specify it with ~ ?
-logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, σ ~ (𝔼 File ℍ, SizeBytes, Word16, 𝕄 ThreadId)) =>
-             [LogR ω]                                             -- ^ trx
-           → [LogTransformer ω]                                   -- ^ ls
-           → (σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ)) -- ^ rt (rotator)
+logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ {-, σ ~ (𝕄 ℍ, SizeBytes, 𝕄 ThreadId) -}) =>
+             [LogR ω]                                               -- ^ trx
+           → [LogTransformer ω]                                     -- ^ ls
+           → (𝕄 σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ)) -- ^ rt (rotator)
            -- XXX this is used for the initial state of the rotator...
            --     can we do better, e.g., have the rotator give us the initial name?
-           → File                                                 -- ^ fn
-           → LoggingT (Log ω) μ α                                 -- ^ io
+           → File                                                   -- ^ fn
+           → LoggingT (Log ω) μ α                                   -- ^ io
            → μ α
 logToFiles ls trx rt fn io =
  let opts = Just fileBatchingOptions
      lro  = logRenderOpts' ls Unbounded
  in  -- XXX can we avoid initializing the state here, which is dependent on the
      --     rotator/compressor?
-     logToHandlesNoAdornments rt opts lro trx (𝓛 fn,0,0,𝓝) io
+     logToHandlesNoAdornments rt opts lro trx io
 
 compressPzstd ∷ (File → File → IO (), PathComponent)
 compressPzstd = (pzstd', [pc|zst|])
@@ -1218,10 +1224,8 @@ compressPzstd = (pzstd', [pc|zst|])
 -- XXX set the compressor
 -- XXX while duplicate the file name?
 -- XXX that initial state seems like it should be generated by simpleSizeRotator
-simpleSizeRotator ∷ ∀ ω μ . MonadIO μ =>
-                    𝕄 Word16 → 𝕄 CMode → SizeBytes → File
-                  → (𝔼 File ℍ, SizeBytes, Word16, 𝕄 ThreadId) → ω → 𝕋
-                  → μ (Handle, (𝔼 File ℍ, SizeBytes, Word16, 𝕄 ThreadId))
+simpleSizeRotator ∷ ∀ ω μ σ . (MonadIO μ, σ ~ (𝕄 ℍ, SizeBytes, 𝕄 ThreadId)) =>
+                    𝕄 Word16 → 𝕄 CMode → SizeBytes → File → 𝕄 σ → ω → 𝕋 → μ (Handle, σ)
 simpleSizeRotator max_files perms sz fn =
   let numDigits ∷ (Integral α, Unsigned α) => α → I64
       numDigits 0 = 1
@@ -1235,8 +1239,10 @@ simpleSizeRotator max_files perms sz fn =
 
       max_files' = max_files ⧏ 10
       num = padNumber (numDigits max_files')
-  in  fileSizeRotator (𝓙 compressPzstd) sz (perms ⧏ 0o644) max_files'
-                      ((fn ⊙) ∘ __parse'__ @PathComponent ∘ num ∘ fromIntegral)
+      fngen 𝓝    = fn
+      fngen (𝓙 i) = (fn ⊙) ∘ __parse'__ @PathComponent ∘ num $ fromIntegral i
+--  in  fileSizeRotator (𝓙 compressPzstd) sz (perms ⧏ 0o644) max_files' fngen
+  in  fileSizeRotator 𝓝 sz (perms ⧏ 0o644) max_files' fngen
 
 --------------------
 
