@@ -1198,8 +1198,7 @@ logToFile cso trx =
   logToFileHandleNoAdornments (stdRenderers cso) trx
 
 {-| run `io`, logging to rotating files -}
--- XXX can we generalize σ here, i.e., not specify it with ~ ?
-logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ {-, σ ~ (𝕄 ℍ, SizeBytes, 𝕄 ThreadId) -}) =>
+logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ) =>
              [LogR ω]                                               -- ^ trx
            → [LogTransformer ω]                                     -- ^ ls
            → (𝕄 σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ)) -- ^ rt (rotator)
@@ -1211,9 +1210,7 @@ logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ {-, σ ~ (𝕄 ℍ, S
 logToFiles ls trx rt fn io =
  let opts = Just fileBatchingOptions
      lro  = logRenderOpts' ls Unbounded
- in  -- XXX can we avoid initializing the state here, which is dependent on the
-     --     rotator/compressor?
-     logToHandlesNoAdornments rt opts lro trx io
+ in  logToHandlesNoAdornments rt opts lro trx io
 
 compressPzstd ∷ (File → File → IO (), PathComponent)
 compressPzstd = (pzstd', [pc|zst|])
