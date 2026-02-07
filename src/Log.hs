@@ -15,14 +15,15 @@ module Log
   , stackOptions, stackParses, stdRenderers
   , logFilter, mapLog, mapLogE
   , simpleSizeRotator
+
+  , compressPzstd
   -- test data
   , tests, _log0, _log0m, _log1, _log1m )
 where
 
 -- base --------------------------------
 
-import qualified Control.Concurrent.MVar  as  MVar
-import qualified  Data.Foldable           as  Foldable
+import qualified  Data.Foldable  as  Foldable
 
 import Control.Applicative      ( Applicative( (<*>), pure ) )
 import Control.Concurrent       ( ThreadId, forkIO, threadDelay )
@@ -118,7 +119,7 @@ import MonadError.IO.Error  ( AsIOError, IOError, _IOErr )
 -- monadio-plus ------------------------
 
 import MonadIO.Error.CreateProcError  ( ProcError )
-import MonadIO.File                   ( devnull, rename )
+import MonadIO.File                   ( chmod, devnull, rename )
 import MonadIO.FStat                  ( FExists( FExists ), lfexists )
 import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
                                         handle, hClose, hname )
@@ -243,6 +244,12 @@ import Log.LogRenderOpts  ( LogR, LogRenderOpts
 import LogPlus.Paths  qualified as  Paths
 
 --------------------------------------------------------------------------------
+
+{- | How to compress files; first element takes from,to filenames and does the deed;
+     second element is the filename extension to post onto the end. -}
+type Compressor = (File → File → IO (), PathComponent)
+
+------------------------------------------------------------
 
 -- odd ordering of variables make definition of Functor, Applicative, Monad
 -- instances easier (or maybe possible)
@@ -828,15 +835,14 @@ setMVar mvar val = swapMVar mvar val ⪼ return ()
 ------------------------------------------------------------
 
 flusher ∷ ∀ δ σ ρ ψ μ . (MonadIO μ, Foldable ψ) => -- δ is, e.g., Handle
-          (𝕄 σ → 𝕋 → μ (δ,σ))               -- ^ handle generator
-        → MVar σ                  -- ^ incoming handle state
-        → (SimpleDocStream ρ → 𝕋)         -- ^ render SimpleDocStream ρ to 𝕋
---        → (δ → SimpleDocStream ρ → μ ())  -- ^ write messages to log
-        → (δ → 𝕋 → μ ())  -- ^ write messages to log
+          (𝕄 σ → 𝕋 → μ (δ,σ))      -- ^ handle generator
+        → MVar σ                   -- ^ incoming handle state
+        → (SimpleDocStream ρ → 𝕋)  -- ^ render SimpleDocStream ρ to 𝕋
+        → (δ → 𝕋 → μ ())           -- ^ write messages to log
         → PageWidth
-        → ψ (Doc ρ)                       -- ^ messages to log
+        → ψ (Doc ρ)                -- ^ messages to log
         → μ ()
-flusher hgen stvar renderT r pw messages = do
+flusher hgen stvar renderT logit pw messages = do
   let layout ∷ Foldable ψ ⇒ ψ (Doc π) → SimpleDocStream π
       layout ms = layoutPretty (LayoutOptions pw)
                                (vsep (Foldable.toList ms) ⊕ line')
@@ -845,25 +851,14 @@ flusher hgen stvar renderT r pw messages = do
   st ← liftIO$ tryReadMVar stvar
   (h,st') ← hgen st t
   _ ← liftIO $ swapMVar stvar st'
-  -- XXX
-  r h t
+  logit h t
 
 ----------------------------------------
 
 newtype SizeBytes = SizeBytes Word64
   deriving (Enum,Eq,Integral,Num,Ord,Real,Show)
 
-{-| Log to a file, which is rotated by size.
-
-    Every time we're about to write a log, we check to see the size of the file
-    (as monitored from prior logwriting), and if we're about to exceed the given
-    max size (and this isn't the first write to the file): we rotate the files,
-    and log to a new file.
--}
--- state (σ) is (current handle in use,bytes written so far,
---               index (starts at zero, incrementing))
-
--- XXX add mode selector
+------------------------------------------------------------
 
 takeWhileM ∷ Monad m => (a → m Bool) → [a] → m [a]
 takeWhileM _ []     = return []
@@ -894,11 +889,46 @@ threadIsRunning tid = threadStatus tid ≫ \ case
                         ThreadBlocked _ → return ThreadIsRunning
                         ThreadDied      → return ThreadIsNotRunning
 
+{-| Log to a file, which is rotated by size.
+
+    Every time we're about to write a log, we check to see the size of the file
+    (as monitored from prior logwriting), and if we're about to exceed the given
+    max size (and this isn't the first write to the file): we rotate the files,
+    and log to a new file.
+
+    State (σ) is (current handle in use,bytes written so far, threadId of last-run
+    compressor).
+-}
+
 -- XXX test with & without compressor.
 
 fileSizeRotator ∷ ∀ ω μ σ . (MonadIO μ, σ ~ (𝕄 ℍ,SizeBytes,𝕄 ThreadId)) =>
-                  𝕄 (File → File → IO(), PathComponent) → SizeBytes → CMode → Word16
-                → (𝕄 Word16 → File) → 𝕄 σ → ω → 𝕋 → μ (Handle,σ)
+                  𝕄 Compressor      -- ^ how to compress old files, if at all.  If not
+                                    --   nothing, the IO will be run in its own thread
+                                    --   and only one will be run at a time; logging will
+                                    --   continue to the open file, even if oversized, until
+                                    --   the prior compression has completed
+                → SizeBytes         -- ^ max file size; rotate (& compress?) files
+                                    --   once they are about to exceed this.  Each file
+                                    --   will receive at least one log message, but if the
+                                    --   next log message would cause the file to exceed
+                                    --   this size, then it will be rotated unless there is
+                                    --   an ongoing unfinished compression
+                → CMode             -- ^ Create files with these file permissions.
+                                    --   Note that during compression, the perms may be
+                                    --   wrong, they are set afterwards
+                → Word16            -- ^ maximum number of files to manage/rotate; the
+                                    --   numbers appended will be zero-padded to all be the
+                                    --   same length
+                → (𝕄 Word16 → File) -- ^ file name generator; takes the number of the file
+                                    --   numbered 0 for most recent, incrementing; or
+                                    --   𝓝 for the file to write current logs to
+                → 𝕄 σ               -- ^ incoming state; should be 𝓝 at first, will be
+                                    --   self-managed for recursion
+                → ω                 -- ^ SimpleDocStream (unused)
+                → 𝕋                 -- ^ rendered text to write (used to calculate whether
+                                    --   to rotate)
+                → μ (Handle,σ)      -- ^ new handle & state
 fileSizeRotator compress max_size file_perms max_files fngen st_ _sds t = do
   let (ɦ,bytes_written,tid) = st_ ⧏ (𝓝,0,𝓝)
       l           = SizeBytes (ɨ $ щ t) -- length of t
@@ -917,12 +947,14 @@ fileSizeRotator compress max_size file_perms max_files fngen st_ _sds t = do
         let m1 []          = 𝓝
             m1 ((𝓙 x) : _) = 𝓙 x
             m1 (𝓝 : xs)   = m1 xs
-            mv_compress ∷ (File,File,𝕄 (File → File → IO(),PathComponent)) → IO (𝕄 ThreadId)
+            mv_compress ∷ (File,File,𝕄 Compressor) → IO (𝕄 ThreadId)
             mv_compress (from,to,do_compress) = do
               ꙝ' $ rename @IOError from to
               case do_compress of
                 𝓝 → return 𝓝
-                𝓙 (c,ext) → 𝓙 ⊳ forkIO (c to (to⊙ext))
+                𝓙 (c,ext) →
+                  let c' = \ fm tt → do { c fm tt; ж $ chmod @IOError file_perms tt }
+                  in  𝓙 ⊳ forkIO (c' to (to⊙ext))
         tid' ← liftIO $ m1 ⊳ forM (reverse mv_files) mv_compress
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => File → μ ℍ
@@ -950,18 +982,19 @@ fileSizeRotator compress max_size file_perms max_files fngen st_ _sds t = do
 {- | Write to an FD with given options, using `withBatchedHandler`.
      Each log entry is vertically separated.
  -}
--- XXX document the arguments
 withFDHandler ∷ ∀ α δ σ ρ μ . (MonadIO μ, MonadMask μ) ⇒
+               -- | generate a handle from maybe-state, input docstream/text
                (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (δ,σ))
-             → (SimpleDocStream ρ → 𝕋)
-             → (δ → 𝕋 → IO())
+             → (SimpleDocStream ρ → 𝕋) -- ^ render the text from the docstream
+             → (δ → 𝕋 → IO())          -- ^ write the text to the handle
              → PageWidth
              → BatchingOptions
-             → 𝕄 σ
+             → 𝕄 σ                     -- ^ incoming state for handle generation
+             -- | how to run the logging, e.g., runLoggingT++ (runs the log, does the IO)
              → (Handler μ (Doc ρ) → μ α) -- A.K.A, (Doc ρ → μ ()) → μ α
              → μ (α,σ)
 
-withFDHandler hgen renderT r pw bopts st handler = do
+withFDHandler hgen renderT logit pw bopts st handler = do
   -- even though this looks like it should happen every time through the loop;
   -- tracing it, it clearly doesn't.  I don't know why, I guess it's something
   -- to do with the construction of monadlog: but I don't seem to need to worry
@@ -971,7 +1004,7 @@ withFDHandler hgen renderT r pw bopts st handler = do
       layout ms = layoutPretty (LayoutOptions pw)
                                (vsep (Foldable.toList ms) ⊕ line')
       -- flush ∷ Foldable ψ ⇒ ψ (Doc ρ) → IO ()
-      flush ms = flusher (\ ṡ t → hgen ṡ (layout ms) t) stvar renderT r pw ms
+      flush ms = flusher (\ ṡ t → hgen ṡ (layout ms) t) stvar renderT logit pw ms
   a ← withBatchedHandler bopts flush handler
   st' ← liftIO $ readMVar stvar
   return (a,st')
@@ -1043,23 +1076,18 @@ logToHandles ∷ ∀ α σ ρ ω μ  . (MonadIO μ, MonadMask μ) =>
              → μ (α,σ)
 
 logToHandles hgen renderT renderEntry mbopts width io = do
-  let renderIO h t = hPutStr h t ⪼ hFlush h -- ∷ Handle→ SimpleDocStream ρ →IO()
+  let -- renderIO ∷ Handle → SimpleDocStream ρ → IO()
+      renderIO h t = hPutStr h t ⪼ hFlush h
   (fh,ṡṫ) ← liftIO $ hgen 𝓝 SEmpty ""
   a ← case mbopts of
     𝓝       → withSimpleHandler renderT width fh renderIO renderEntry io
     𝓙 bopts →
-      let renderDoc {- Log ω → 𝕄 (Doc ρ) -} =
-            vsep ∘ toList ⩺ nonEmpty ∘ catMaybes ∘ fmap renderEntry ∘otoList
+      let -- renderDoc ∷ Log ω → 𝕄 (Doc ρ)
+          renderDoc = vsep ∘ toList ⩺ nonEmpty ∘ catMaybes ∘ fmap renderEntry ∘ otoList
 
           -- handler ∷ (𝕄 (Doc ρ) → μ ()) → μ α
           handler h  = runLoggingT io (whenJust h ∘ renderDoc)
-
-          -- XXX use PathComponent, possibly in conjunction with
-          -- AbsFile.updateBasename, to make this safe
-          -- fngen = __parse'__ @AbsFile ∘ [fmt|/tmp/foo.%d.zst|]
-          -- hgen  = fileSizeRotator 10 fngen
---       in fst ⊳ withFDHandler hgen renderT renderIO width bopts (𝓙 fh,0,0) handler
-       in fst ⊳ withFDHandler hgen renderT renderIO width bopts (𝓙 ṡṫ) handler
+      in  fst ⊳ withFDHandler hgen renderT renderIO width bopts (𝓙 ṡṫ) handler
   return (a,ṡṫ)
 
 ----------------------------------------
@@ -1202,28 +1230,24 @@ logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ) =>
              [LogR ω]                                               -- ^ trx
            → [LogTransformer ω]                                     -- ^ ls
            → (𝕄 σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ)) -- ^ rt (rotator)
-           -- XXX this is used for the initial state of the rotator...
-           --     can we do better, e.g., have the rotator give us the initial name?
-           → File                                                   -- ^ fn
            → LoggingT (Log ω) μ α                                   -- ^ io
            → μ α
-logToFiles ls trx rt fn io =
+logToFiles ls trx rt io =
  let opts = Just fileBatchingOptions
      lro  = logRenderOpts' ls Unbounded
  in  logToHandlesNoAdornments rt opts lro trx io
 
-compressPzstd ∷ (File → File → IO (), PathComponent)
+compressPzstd ∷ Compressor
 compressPzstd = (pzstd', [pc|zst|])
 
 {-| an instance of file rotator that defaults perms to 0o644, max files to 10,
     uses a pattern that appends numbers to the end of the filenames, and compresses
     archive files with pzstd -}
 -- XXX set the compressor
--- XXX while duplicate the file name?
--- XXX that initial state seems like it should be generated by simpleSizeRotator
 simpleSizeRotator ∷ ∀ ω μ σ . (MonadIO μ, σ ~ (𝕄 ℍ, SizeBytes, 𝕄 ThreadId)) =>
-                    𝕄 Word16 → 𝕄 CMode → SizeBytes → File → 𝕄 σ → ω → 𝕋 → μ (Handle, σ)
-simpleSizeRotator max_files perms sz fn =
+                    𝕄 Compressor → 𝕄 Word16 → 𝕄 CMode → SizeBytes → File → 𝕄 σ → ω → 𝕋
+                  → μ (Handle, σ)
+simpleSizeRotator compressor max_files perms sz fn =
   let numDigits ∷ (Integral α, Unsigned α) => α → I64
       numDigits 0 = 1
       numDigits n = countDigits n
@@ -1239,7 +1263,8 @@ simpleSizeRotator max_files perms sz fn =
       fngen 𝓝    = fn
       fngen (𝓙 i) = (fn ⊙) ∘ __parse'__ @PathComponent ∘ num $ fromIntegral i
 --  in  fileSizeRotator (𝓙 compressPzstd) sz (perms ⧏ 0o644) max_files' fngen
-  in  fileSizeRotator 𝓝 sz (perms ⧏ 0o644) max_files' fngen
+--  in  fileSizeRotator 𝓝 sz (perms ⧏ 0o644) max_files' fngen
+  in  fileSizeRotator compressor sz (perms ⧏ 0o644) max_files' fngen
 
 --------------------
 
