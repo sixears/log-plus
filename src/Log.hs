@@ -916,6 +916,26 @@ threadIsRunning tid = threadStatus tid ≫ \ case
                         ThreadBlocked _ → return ThreadIsRunning
                         ThreadDied      → return ThreadIsNotRunning
 
+----------------------------------------
+
+{-| The list of moves (and potentially compresses) to perform for numbered file rotation;
+    this accounts for actual file existence -}
+fileNumberedMoves ∷ MonadIO μ => Word16 → (𝕄 Word16 → File) → 𝕄 ℍ → 𝕄 Compressor
+                               → μ [(File, File, 𝕄 Compressor)]
+fileNumberedMoves max_files fngen ɦ compress =
+  let fngen' i    = maybe id (\ e → (⊙ e)) (snd ⊳ compress) $ fngen i
+      fn_nums     = 𝓙 ⊳ [0..max_files]
+      fn_pairs    = (over both fngen') ⊳ zip fn_nums (tailSafe fn_nums)
+      init_fnpair = (maybe (fngen 𝓝) (view hname) ɦ, fngen (𝓙 0), compress)
+      -- `proto_moves` is the list of potential files to move, before filtering on whether
+      -- they actually exist
+      -- only compress when making the first archive file
+      proto_moves = init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
+  in  flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
+        (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
+
+----------------------------------------
+
 {-| Log to a file, which is rotated by size.
 
     Every time we're about to write a log, we check to see the size of the file
@@ -960,17 +980,9 @@ fileSizeRotator compress max_size file_perms max_files fngen st_ _sds t = do
   let (ɦ,bytes_written,tid) = st_ ⧏ (𝓝,0,𝓝)
       l           = SizeBytes (ɨ $ щ t) -- length of t
       bytes_would = bytes_written + l
-      fngen' i    = maybe id (\ e → (⊙ e)) (snd ⊳ compress) $ fngen i
       mkhandle    ∷ μ (ℍ, 𝕄 ThreadId)
       mkhandle    = do
-        -- only compress when making the first archive file
-        let proto_moves =
-              let fn_nums     = 𝓙 ⊳ [0..max_files]
-                  fn_pairs    = (over both fngen') ⊳ zip fn_nums (tailSafe fn_nums)
-                  init_fnpair = (maybe (fngen 𝓝) (view hname) ɦ, fngen (𝓙 0), compress)
-              in  init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
-        mv_files ← flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
-          (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
+        mv_files ← fileNumberedMoves max_files fngen ɦ compress
         tid' ← liftIO $ firstJust ⊳ forM (reverse mv_files) (mv_compress file_perms)
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => File → μ ℍ
