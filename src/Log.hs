@@ -875,6 +875,33 @@ pzstd f t = do
 pzstd' ∷ File → File → IO ()
 pzstd' f t = join $ eToStderr' ⊳ (ѥ @ProcError $ pzstd f t)
 
+----------------------------------------
+
+{-| The first non-𝓝 value in a list, if any -}
+firstJust ∷ [𝕄 α] → 𝕄 α
+firstJust []          = 𝓝
+firstJust ((𝓙 x) : _) = 𝓙 x
+firstJust (𝓝 : xs)    = firstJust xs
+
+----------------------------------------
+
+{-| Move, and optionally compress, a file.
+
+    Rename `from` to `to`, compressing it with `compress` if that is not `Nothing`.
+    If the compressor is initiated, it is fired off in a separate thread, and the `ThreadId`
+    is returned.  Once the compressor is complete, we `chmod` the resultant file to
+    `file_perms`.  We do not `chmod` the `to` file if there is no compressor.
+-}
+mv_compress ∷ CMode → (File,File,𝕄 Compressor) → IO (𝕄 ThreadId)
+mv_compress file_perms (from,to,do_compress) = do
+  ꙝ' $ rename @IOError from to
+  case do_compress of
+    𝓝 → return 𝓝
+    𝓙 (c,ext) →
+      let c' = \ fm tt → do { c fm tt; ж $ chmod @IOError file_perms tt }
+      in  𝓙 ⊳ forkIO (c' to (to⊙ext))
+
+
 ------------------------------------------------------------
 
 data ThreadIsRunning = ThreadIsRunning | ThreadIsNotRunning
@@ -944,18 +971,7 @@ fileSizeRotator compress max_size file_perms max_files fngen st_ _sds t = do
               in  init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
         mv_files ← flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
           (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
-        let m1 []          = 𝓝
-            m1 ((𝓙 x) : _) = 𝓙 x
-            m1 (𝓝 : xs)   = m1 xs
-            mv_compress ∷ (File,File,𝕄 Compressor) → IO (𝕄 ThreadId)
-            mv_compress (from,to,do_compress) = do
-              ꙝ' $ rename @IOError from to
-              case do_compress of
-                𝓝 → return 𝓝
-                𝓙 (c,ext) →
-                  let c' = \ fm tt → do { c fm tt; ж $ chmod @IOError file_perms tt }
-                  in  𝓙 ⊳ forkIO (c' to (to⊙ext))
-        tid' ← liftIO $ m1 ⊳ forM (reverse mv_files) mv_compress
+        tid' ← liftIO $ firstJust ⊳ forM (reverse mv_files) (mv_compress file_perms)
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => File → μ ℍ
             open_file = ж ∘ openFile @IOError NoEncoding (FileW (𝓙 file_perms))
