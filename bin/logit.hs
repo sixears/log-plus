@@ -23,7 +23,8 @@ import MonadIO.FPath  ( pResolve )
 
 -- optparse-applicative ----------------
 
-import Options.Applicative  ( Parser, argument, str, help, metavar, progDesc )
+import Options.Applicative  ( Parser
+                            , argument, flag, help, long, metavar, progDesc, short, str )
 
 -- optparse-plus -----------------------
 
@@ -41,11 +42,16 @@ import Log  ( compressPzstd, info', logToFiles, simpleSizeRotator )
 
 --------------------------------------------------------------------------------
 
-data Options = Options { _fn ∷ 𝕋 }
+data Compress = CompressPzstd | NoCompress
+
+data Options = Options { _fn ∷ 𝕋, _compress ∷ Compress }
 
 parseOptions ∷ Parser Options
-parseOptions = let argMeta          = metavar "FILE" <> help "file to query"
-             in Options ⊳ argument str argMeta
+parseOptions = let argMeta = metavar "FILE" <> help "file to query"
+               in  Options ⊳ argument str argMeta
+                           ⊵ flag CompressPzstd NoCompress
+                                  (ю [ short 'N' ,long "no-compress"
+                                     , help "do not compress old logs" ])
 
 {-| throw an ε into IO as a user error -}
 ԙ ∷ ∀ ε α μ . (MonadIO μ, Printable ε) ⇒ ExceptT ε μ α → μ α
@@ -76,10 +82,11 @@ main = do
 
   let log_renderers    = []
       log_transformers = []
-  -- XXX why duplicate the file name?
-      compressor       = 𝓙 compressPzstd
       rotator          = simpleSizeRotator compressor (𝓙 10) (𝓙 0o644) 10 (FileA fn)
-  logToFiles log_renderers log_transformers rotator $
-    forever (liftIO getLine ≫ info' @())
+                           where compressor = case _compress opts of
+                                                CompressPzstd → 𝓙 compressPzstd
+                                                NoCompress    → 𝓝
+
+  logToFiles log_renderers log_transformers rotator $ forever (liftIO getLine ≫ info' @())
 
 -- that's all, folks! ----------------------------
