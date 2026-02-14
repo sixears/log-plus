@@ -51,7 +51,7 @@ library
 
   build-depends:      base, base-unicode-symbols, data-default, data-textual
                     , deepseq, dlist, exceptions, lens, logging-effect
-                    , mono-traversable, mtl, prettyprinter
+                    , mono-traversable, mtl, pcre-heavy, prettyprinter
                     , prettyprinter-ansi-terminal, safe, tasty, tasty-hunit
                     , terminal-size, text, text-printer, time, unix
 

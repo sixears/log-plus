@@ -14,7 +14,8 @@ module Log
   , logToStderr'
   , stackOptions, stackParses, stdRenderers
   , logFilter, mapLog, mapLogE
-  , simpleSizeRotator
+  -- XXX , fileDayRotator
+  , fileSizeRotator, simpleSizeRotator
 
   , compressPzstd
   -- test data
@@ -170,6 +171,10 @@ import ParsecPlus  ( Parsecable( parser ) )
 
 import ParserPlus  ( caseInsensitiveString, tries )
 
+-- pcre-heavy --------------------------
+
+import Text.Regex.PCRE.Heavy
+
 -- prettyprinter -----------------------
 
 import qualified  Prettyprinter.Render.Text  as  RenderText
@@ -222,7 +227,8 @@ import qualified  Text.Printer  as  P
 
 -- time --------------------------------
 
-import Data.Time.Clock     ( getCurrentTime )
+import Data.Time.Calendar.OrdinalDate  ( Day )
+import Data.Time.Clock                 ( getCurrentTime )
 
 -- unix --------------------------------
 
@@ -947,8 +953,6 @@ fileNumberedMoves max_files fngen ɦ compress =
     compressor).
 -}
 
--- XXX test with & without compressor.
-
 fileSizeRotator ∷ ∀ ω μ σ . (MonadIO μ, σ ~ (𝕄 ℍ,SizeBytes,𝕄 ThreadId)) =>
                   𝕄 Compressor      -- ^ how to compress old files, if at all.  If not
                                     --   nothing, the IO will be run in its own thread
@@ -963,7 +967,7 @@ fileSizeRotator ∷ ∀ ω μ σ . (MonadIO μ, σ ~ (𝕄 ℍ,SizeBytes,𝕄 Th
                                     --   an ongoing unfinished compression
                 → CMode             -- ^ Create files with these file permissions.
                                     --   Note that during compression, the perms may be
-                                    --   wrong, they are set afterwards
+                                    --   wrong: they are set after compression has completed
                 → Word16            -- ^ maximum number of files to manage/rotate; the
                                     --   numbers appended will be zero-padded to all be the
                                     --   same length
@@ -1007,18 +1011,89 @@ fileSizeRotator compress max_size file_perms max_files fngen st_ _sds t = do
 
 ----------------------------------------
 
+{-| Log to a file, which is rotated at a given date.
+
+    Every time we're about to write a log, we check to see the `Day` of the supplied time,
+    and if it's a newer `Day` than the current log file being written to, we roll the log
+    and potentially compress the old one.
+
+    State (σ) is (current handle in use, `Day` corresponding to that handle, threadId of
+    last-run compressor).
+-}
+
+{-
+-- τ is the time type, e.g. `Data.Time.Clock.UTCTime` or `Data.Time.LocalTime.LocalTime`
+fileDayRotator ∷ ∀ τ ω μ σ . (MonadIO μ, σ ~ (𝕄 (ℍ,Day),𝕄 ThreadId)) =>
+                  𝕄 Compressor      -- ^ how to compress old files, if at all.  If not
+                                    --   nothing, the IO will be run in its own thread
+                                    --   and only one will be run at a time; logging will
+                                    --   continue to the open file, even if oversized, until
+                                    --   the prior compression has completed
+                → τ                 -- ^ the time of the log
+                → CMode             -- ^ Create files with these file permissions.
+                                    --   Note that during compression, the perms may be
+                                    --   wrong, they are set afterwards
+                → Word16            -- ^ maximum number of files to manage; any files
+                                    --   matching the glob pattern (including compression),
+                                    --   but beyond the max number, will be deleted
+                → Dir               -- ^ The directory to work in.  This rotator can only
+                                    --   use a single directory, due to the globbing.
+
+                → (𝔹 → 𝕄 Day → PathComponent)
+                                    -- ^ file name generator; takes the day; or
+                                    --   𝓝 for the file to write current logs to; that
+                                    --   slightly-awkward-looking boolean is 𝓣 if this is
+                → Regex             -- ^ file name glob (globs only over path components, in
+                                    --   the given directory)
+
+                → 𝕄 σ               -- ^ incoming state; should be 𝓝 at first, will be
+                                    --   self-managed for recursion
+                → ω                 -- ^ SimpleDocStream (unused)
+                → 𝕋                 -- ^ rendered text to write (used to calculate whether
+                                    --   to rotate)
+                → μ (Handle,σ)      -- ^ new handle & state
+fileDayRotator compress d file_perms max_files fngen st_ _sds t = do
+  let (ɦ,tid) = st_ ⧏ (𝓝,𝓝)
+      l           = SizeBytes (ɨ $ щ t) -- length of t
+      mkhandle    ∷ μ (ℍ, 𝕄 ThreadId)
+      mkhandle    = do
+        mv_files ← fileNumberedMoves max_files fngen ɦ compress
+        tid' ← liftIO $ firstJust ⊳ forM (reverse mv_files) (mv_compress file_perms)
+        let -- open a file, mode 0644, raise if it fails
+            open_file ∷ MonadIO μ => File → μ ℍ
+            open_file = ж ∘ openFile @IOError NoEncoding (FileW (𝓙 file_perms))
+        ẖ ∷ ℍ ← open_file (fngen 𝓝)
+        return (ẖ, tid')
+
+  threadRunning ← liftIO $ case tid of
+                    𝓝   → return ThreadIsNotRunning
+                    𝓙 ŧ → threadIsRunning ŧ
+  case ɦ of
+    𝓙 𝕙 → if and [ threadRunning ≠ ThreadIsRunning
+                 -- XXX day is no longer correct
+                 ]
+          then do -- time to make a new handle
+            hClose 𝕙
+            (𝕙',ṯ) ← mkhandle
+            return (𝕙' ⊣ handle,(𝓙 𝕙',l,ṯ))
+          else return (𝕙 ⊣ handle,(𝓙 𝕙,tid))
+    𝓝   → mkhandle ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle,(𝓙 𝕙',l,ṯ))
+-}
+
+----------------------------------------
+
 {- | Write to an FD with given options, using `withBatchedHandler`.
      Each log entry is vertically separated.
  -}
-withFDHandler ∷ ∀ α δ σ ρ μ . (MonadIO μ, MonadMask μ) ⇒
+withFDHandler ∷ ∀ α σ ρ μ . (MonadIO μ, MonadMask μ) ⇒
                -- | generate a handle from maybe-state, input docstream/text
-               (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (δ,σ))
+               (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (Handle,σ))
              → (SimpleDocStream ρ → 𝕋) -- ^ render the text from the docstream
-             → (δ → 𝕋 → IO())          -- ^ write the text to the handle
+             → (Handle → 𝕋 → IO())     -- ^ write the text to the handle
              → PageWidth
              → BatchingOptions
              → 𝕄 σ                     -- ^ incoming state for handle generation
-             -- | how to run the logging, e.g., runLoggingT++ (runs the log, does the IO)
+               -- | how to run the logging, e.g., runLoggingT++ (runs the log, does the IO)
              → (Handler μ (Doc ρ) → μ α) -- A.K.A, (Doc ρ → μ ()) → μ α
              → μ (α,σ)
 
