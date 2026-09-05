@@ -26,15 +26,16 @@ where
 
 -- base --------------------------------
 
-import Data.Foldable  ( Foldable( foldr ) )
-import Data.Function  ( ($), flip, id )
-import Data.Functor   ( fmap )
-import Data.Maybe     ( Maybe( Nothing ) )
-import Data.String    ( String )
-import GHC.Stack      ( SrcLoc )
-import System.Exit    ( ExitCode )
-import System.IO      ( Handle, IO, stdout )
-import Text.Show      ( show )
+import Data.Foldable       ( Foldable( foldr ) )
+import Data.Function       ( ($), flip, id )
+import Data.Functor        ( fmap )
+import Data.Maybe          ( Maybe( Nothing ) )
+import Data.String         ( String )
+import Data.Type.Equality  ( type(~) )
+import GHC.Stack           ( SrcLoc )
+import System.Exit         ( ExitCode )
+import System.IO           ( Handle, IO, stdout )
+import Text.Show           ( show )
 
 -- base-unicode-symbols ----------------
 

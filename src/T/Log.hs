@@ -148,8 +148,7 @@ logRenderTests =
 ----------------------------------------
 
 tests ∷ TestTree
-tests = testGroup "Log" [ Log.tests
-                        , Log.LogRenderOpts.tests, logRenderTests ]
+tests = testGroup "Log" [ Log.tests, Log.LogRenderOpts.tests, logRenderTests ]
 
 ----------------------------------------
 
