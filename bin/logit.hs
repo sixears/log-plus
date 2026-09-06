@@ -38,7 +38,8 @@ import Data.Text.IO  ( getLine )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log  ( compressPzstd, info', logToFiles, simpleSizeRotator )
+import Log  ( compressorMay, compressPzstd, fileSizeRotator, info', logToFiles
+            , mkFileSizeRotatorOptions )
 
 --------------------------------------------------------------------------------
 
@@ -82,10 +83,11 @@ main = do
 
   let log_renderers    = []
       log_transformers = []
-      rotator          = simpleSizeRotator compressor (𝓙 10) (𝓙 0o644) 10 (FileA fn)
-                           where compressor = case _compress opts of
-                                                CompressPzstd → 𝓙 compressPzstd
-                                                NoCompress    → 𝓝
+      fsr_opts         = mkFileSizeRotatorOptions 10 & compressorMay ⊢ compressor
+                         where compressor = case _compress opts of
+                                              CompressPzstd → 𝓙 compressPzstd
+                                              NoCompress    → 𝓝
+      rotator          = fileSizeRotator fsr_opts (FileA fn)
 
   logToFiles log_renderers log_transformers rotator $ forever (liftIO getLine ≫ info' @())
 

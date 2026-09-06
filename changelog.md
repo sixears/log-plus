@@ -1,3 +1,7 @@
+0.0.5.0 2026-09-06
+==================
+- incomplete implementation of file rotation
+
 0.0.4.5 2025-12-05
 ==================
 - updated call to formatUTCYDoW for tfmt 0.3.1.0
