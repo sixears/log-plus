@@ -50,7 +50,7 @@ library
                     , ViewPatterns
 
   build-depends:      async, base, base-unicode-symbols, data-default
-                    , data-textual, deepseq, dlist, exceptions, lens
+                    , data-textual, deepseq, dlist, exceptions, extra, lens
                     , logging-effect, mono-traversable, mtl, prettyprinter
                     , prettyprinter-ansi-terminal, safe, tasty, tasty-hunit
                     , terminal-size, text, text-printer, time, unix

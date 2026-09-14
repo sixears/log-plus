@@ -30,7 +30,7 @@ where
 -- XXX move some functions to other modules
 
 import Prelude  ( error, undefined ) -- XXX
--- import Debug.Trace  ( traceShow, trace ) -- XXX
+import Debug.Trace  ( traceShow, trace ) -- XXX
 
 -- async -------------------------------
 
@@ -107,6 +107,10 @@ import Data.DList  ( DList, singleton )
 
 import Control.Monad.Catch  ( MonadMask )
 
+-- extra -------------------------------
+
+import Data.List.Extra  ( dropEnd, takeEnd )
+
 -- fstat -------------------------------
 
 import FStat  ( FStat, size )
@@ -153,9 +157,10 @@ import MonadError.IO.Error  ( AsIOError, IOError, _IOErr )
 -- monadio-plus ------------------------
 
 import MonadIO.Directory              ( GlobPCRERegex, __pwd__, directoryList
-                                      , glob, inDir, listdirStdOut )
+                                      , glob, inDir, listdirStdOut, mkGlobRegex
+                                      )
 import MonadIO.Error.CreateProcError  ( ProcError )
-import MonadIO.File                   ( chmod, devnull, rename )
+import MonadIO.File                   ( chmod, devnull, rename, unlink )
 import MonadIO.FStat                  ( FExists( FExists ), lfexists )
 import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
                                         handle, hClose, hname )
@@ -177,7 +182,7 @@ import Data.MonoTraversable  ( Element
 
 -- more-unicode ------------------------
 
-import Data.MoreUnicode.Applicative  ( (⋫) )
+import Data.MoreUnicode.Applicative  ( (⊵), (⋫) )
 import Data.MoreUnicode.Bool         ( 𝔹, pattern 𝓕, pattern 𝓣 )
 import Data.MoreUnicode.Either       ( 𝔼, pattern 𝓛, pattern 𝓡 )
 import Data.MoreUnicode.Functor      ( (⊳), (⊳⊳), (⩺) )
@@ -198,7 +203,7 @@ import Control.Monad.Identity  ( runIdentity )
 
 import Natural            ( (⊟) )
 import Natural.Length     ( щ )
-import Natural.Replicate  ( replicate_ )
+import Natural.Replicate  ( drop_, replicate_ )
 import Natural.Unsigned   ( I64, Unsigned, ɨ )
 
 -- parsec-plus -------------------------
@@ -227,7 +232,7 @@ import Prettyprinter.Render.Terminal  ( AnsiStyle )
 
 -- safe --------------------------------
 
-import Safe  ( headDef, tailSafe )
+import Safe  ( headDef, lastMay, tailSafe )
 
 -- single ------------------------------
 
@@ -268,12 +273,14 @@ import qualified  Text.Printer  as  P
 
 -- time --------------------------------
 
-import Data.Time.Clock   ( getCurrentTime )
-import Data.Time.Format  ( FormatTime )
+import Data.Time.Calendar.OrdinalDate  ( fromOrdinalDate )
+import Data.Time.Clock                 ( getCurrentTime )
+import Data.Time.Format                ( FormatTime
+                                       , defaultTimeLocale, formatTime )
 
 -- unix --------------------------------
 
-import System.Posix.Types  ( CMode )
+import System.Posix.Types  ( FileMode )
 
 ------------------------------------------------------------
 --                     local imports                       -
@@ -397,6 +404,7 @@ instance HasFilenameExtension Compressor where
 
 -- odd ordering of variables make definition of Functor, Applicative, Monad
 -- instances easier (or maybe possible)
+{-| an either/error monad, designed to exit with the first error -}
 data EMonad ε μ α = MonadIO μ => EMonad { runEMonadE ∷ μ (𝔼 ε α) }
 
 --------------------
@@ -424,28 +432,41 @@ instance MonadIO μ => Monad (EMonad ε μ) where
 
 --------------------
 
+{-| construct an `EMonad` from an `ExceptT`; e.g., a `monadError` -}
 eMonad ∷ ∀ ε α μ . MonadIO μ => ExceptT ε μ α → EMonad ε μ α
 eMonad = EMonad ∘ ѥ
 
+{-| unicode alias for `eMonad` (`EMonad` construction) -}
 ꙗ ∷ ∀ ε α μ . MonadIO μ => ExceptT ε μ α → EMonad ε μ α
 ꙗ = eMonad
 
 --------------------
 
-{-| Given an Either, dump the Left to stderr; return Right as a Just -}
+{-| write some text to stderr (in case something fails within the logging) -}
+stdErr ∷ MonadIO μ => 𝕋 → μ ()
+stdErr t = liftIO (hPutStrLn stderr t)
+
+--------------------
+
+{-| given an Either, dump a `Left` to stderr; return `Right` as a `Just` -}
 eToStderr ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => 𝔼 ε α → μ (𝕄 α)
-eToStderr (𝓛 e) = do { liftIO $ hPutStrLn stderr (toText e); return 𝓝 }
+eToStderr (𝓛 e) = do { stdErr (toText e); return 𝓝 }
 eToStderr (𝓡 r) = return (𝓙 r)
 
-eToStderr' ∷ Printable ε => 𝔼 ε α → IO ()
-eToStderr' = (const ()) ⩺ eToStderr
+{-| `eToStderr`, but reified to `IO()` -}
+eToStderrIO ∷ Printable ε => 𝔼 ε α → IO ()
+eToStderrIO = (const ()) ⩺ eToStderr
 
+{-| run a sequence of potentially errorful computations; writing any failures to
+    stderr, maybe returning a result -}
 runEMonad ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => EMonad ε μ α → μ (𝕄 α)
 runEMonad m = runEMonadE m ≫ eToStderr
 
+{-| shortcut for making and running an `EMonad`, with a unicode alias -}
 ꙝ ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => ExceptT ε μ α → μ (𝕄 α)
 ꙝ = runEMonad ∘ eMonad
 
+{-| like `ꙝ`, discarding the result -}
 ꙝ' ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => ExceptT ε μ α → μ ()
 ꙝ' = const () ⩺ ꙝ
 
@@ -1002,7 +1023,7 @@ pzstd f t = do
 ----------------------------------------
 
 pzstdIO ∷ File → File → IO ()
-pzstdIO f t = join $ eToStderr' ⊳ (ѥ @ProcError $ pzstd f t)
+pzstdIO f t = join $ eToStderrIO ⊳ (ѥ @ProcError $ pzstd f t)
 
 ----------------------------------------
 
@@ -1014,6 +1035,20 @@ firstJust (𝓝 : xs)    = firstJust xs
 
 ----------------------------------------
 
+{-| spawn a thread that runs a compressor, and fixes up the file permissions
+    after -}
+asyncCompressorThread ∷ (MonadIO μ, HasCompressorIO δ, HasFilenameExtension δ) =>
+                        δ → FileMode → File → μ CompressorThread
+asyncCompressorThread c file_perms to = liftIO $
+  let c' ∷ File → File → IO ()
+      c' = \ from_ to_ → do (c ⊣ compressorIOF) from_ to_
+                            ж $ chmod @IOError file_perms to_
+      ext = c ⊣ filenameExtensionPC
+  in  CompressorThread ⊳ async (c' to (to⊙ext))
+
+
+----------------------------------------
+
 {-| Move, and optionally compress, a file.
 
     Rename `from` to `to`, compressing it with `compress` if that is not
@@ -1022,19 +1057,12 @@ firstJust (𝓝 : xs)    = firstJust xs
     `chmod` the resultant file to `file_perms`.  We do not `chmod` the `to` file
     if there is no compressor.
 -}
-mv_compress ∷ CMode → (File,File,𝕄 Compressor) → IO (𝕄 CompressorThread)
-mv_compress file_perms (from,to,do_compress) = do
+mvCompress ∷ FileMode → (File,File,𝕄 Compressor) → IO (𝕄 CompressorThread)
+mvCompress file_perms (from,to,do_compress) = do
   ꙝ' $ rename @IOError from to
   case do_compress of
     𝓝   → return 𝓝
-    𝓙 c →
-      let c' ∷ File → File → IO ()
-          c' = \ fm tt → do (c ⊣ compressorIOF) fm tt
-                            ж $ chmod @IOError file_perms tt
-          ext = c ⊣ filenameExtensionPC
-      in  𝓙 ∘ CompressorThread ⊳ async (c' to (to⊙ext))
---      in  (c' to (to⊙ext)) ⪼ return 𝓝 -- for testing without threads
-
+    𝓙 c → 𝓙 ⊳ asyncCompressorThread c file_perms to
 
 ------------------------------------------------------------
 
@@ -1052,8 +1080,13 @@ threadIsRunning x = liftIO $
 
 ----------------------------------------
 
-{-| list of moves (and potentially compresses) to perform for numbered file
-    rotation; this accounts for actual file existence -}
+{-| List of moves (and potentially compresses) to perform for numbered file
+    rotation; this accounts for actual file existence.  This doesn't actually
+    perform any destructive IO (just some `stat`s); rather provides a list of
+    instructions.
+-}
+-- XXX how are we checking for which files need compressing?
+-- XXX use EMonad and friends?
 fileNumberedMoves ∷ MonadIO μ => File → FileSizeRotatorOptions → 𝕄 ℍ
                                → μ [(File, File, 𝕄 Compressor)]
 fileNumberedMoves fn opts ɦ  =
@@ -1073,11 +1106,20 @@ fileNumberedMoves fn opts ɦ  =
 
 ----------------------------------------
 
-{-| remove old files, compress the latest file that needs it -}
+{-| Provide the name of a file to compress (if any), and a list of older files to
+    purge.  "Old" is determined by filename, which are assumed to be written in
+    a lexical format that makes the oldest file lexically the first (e.g.,
+    "logfile-2026-09-09").
+
+    This doesn't actually perform any destructive IO (just some `stat`s and
+    directory reads); rather it provides a list of instructions.
+-}
+-- XXX how are we checking for which files need compressing?
+-- XXX use EMonad and friends?
 fileCompressClean ∷ (MonadIO μ, AsIOError ε, AsFPathError ε, MonadError ε μ) =>
-                    File → FileTimeRotatorOptions τ → 𝕄 ℍ
-                  → μ [(File, File, 𝕄 Compressor)]
-fileCompressClean fn opts ɦ  = do
+                    {- XXX File → -} FileTimeRotatorOptions τ
+                  → μ (𝕄 (AbsFile, Compressor), [AbsFile])
+fileCompressClean {- XXX fn -} opts = do
   let compress    = opts ⊣ compressorMay
       -- XXX fngen       = filenameGenerator opts
       max_files   = opts ⊣ maxFiles
@@ -1095,8 +1137,11 @@ fileCompressClean fn opts ɦ  = do
     hPutStrLn stderr $ [fmt|ignoring globbed directory: %T|] d
   forM_ errs $ \ (f∷AbsFile,e∷FPathIOError) → liftIO $ do
     hPutStrLn stderr $ [fmt|failed to read '%T': %T|] f e
-  let fns ∷ [AbsFile] = sort (fst ⊳ fes)
-  return [] -- XXX
+  let fns    ∷ [AbsFile] = sort (fst ⊳ fes) -- the oldest is listed first
+      rms    ∷ [AbsFile] = -- ⊟ 1 to account for the file we're about to write
+        dropEnd (fromIntegral $ (unMaxFiles max_files)⊟1) fns
+      cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
+  traceShow("fileCompressClean.return", fns, cmprss, rms, lastMay fns, max_files) $ return (cmprss, rms) -- XXX
 
 ------------------------------------------------------------
 
@@ -1277,7 +1322,7 @@ instance FilenameGenerator (TimeFilenameGenerator τ) (TimeFnGen τ) where
 
 ------------------------------------------------------------
 
-class HasPerms α where perms ∷ Lens' α CMode
+class HasPerms α where perms ∷ Lens' α FileMode
 
 ------------------------------------------------------------
 
@@ -1337,7 +1382,7 @@ data FileSizeRotatorOptions =
                               --   compression, the perms may be wrong:
                               --   they are set after compression has
                               --   completed
-                              _fsro_perms  ∷ CMode
+                              _fsro_perms  ∷ FileMode
                             , -- | maximum number of files to
                               --   manage/rotate; the numbers appended will
                               --   be zero-padded to all be the same length
@@ -1397,8 +1442,12 @@ mkFileSizeRotatorOptions mxf =
 ------------------------------------------------------------
 
 {-| a simple time generator, which adds the date to the end of a filename -}
-dayFilenameGenerator ∷ FormatTime τ => TimeFilenameGenerator τ
-dayFilenameGenerator = undefined
+dayFilenameGenerator ∷ (FormatTime τ, Show τ) => TimeFilenameGenerator τ
+dayFilenameGenerator =
+  let formatDate = formatTime defaultTimeLocale "-%Y-%m-%d"
+      pcDate     = __parseS__ ∘ formatDate
+  in  TimeFilenameGenerator { _tfg_name = "dayFilenameGenerator"
+                            , _tfg_fngen = \ pc_ d → traceShow ("dayFilenameGenerator", d, pc_, pcDate d) $ pc_ ◇ pcDate d }
 
 ------------------------------------------------------------
 
@@ -1428,10 +1477,14 @@ data FileTimeRotatorOptions τ =
                               --   compression, the perms may be wrong:
                               --   they are set after compression has
                               --   completed
-                              _ftro_perms  ∷ CMode
-                            , -- | maximum number of files to
+                              _ftro_perms  ∷ FileMode
+                            , -- | Maximum number of files to
                               --   manage/rotate; the numbers appended will
-                              --   be zero-padded to all be the same length
+                              --   be zero-padded to all be the same length.
+                              --   Note that this number includes the current
+                              --   file being written, so if set to (say) 3,
+                              --   there should never be more than 3 matching
+                              --   files (including the current one).
                               _ftro_mxfs   ∷ MaxFiles
                             , -- | file name generator; takes a timestamp or 𝓝
                               --   for the file to write current logs to
@@ -1485,17 +1538,22 @@ instance HasGlobPCRERegex (FileTimeRotatorOptions τ) where
    the maximum number of files.
 
  -}
-mkFileTimeRotatorOptions ∷ FormatTime τ => FileTimeRotatorOptions τ
-mkFileTimeRotatorOptions =
+mkFileTimeRotatorOptions ∷ (FormatTime τ, Show τ) =>
+                           AbsDir → GlobPCRERegex → FileTimeRotatorOptions τ
+mkFileTimeRotatorOptions dir pcre =
   let fngen = dayFilenameGenerator
   in  FileTimeRotatorOptions { _ftro_cmprss = 𝓙 compressPzstd
                              , _ftro_perms  = 0o644
+                             , _ftro_mxfs   = MaxFiles 10
                              , _ftro_fngen  = fngen
+                             , _ftro_glob   = pcre
+                             , _ftro_dir    = dir
                              }
 
 ------------------------------------------------------------
 
 -- XXX what happens if we start logging to an extant file?
+-- XXX use EMonad and friends?
 fileSizeRotator ∷ ∀ ω μ . MonadIO μ =>
                   FileSizeRotatorOptions
                 → File                   -- ^ base filename (passed to `fngen`)
@@ -1516,14 +1574,14 @@ fileSizeRotator opts fn st_ _sds t = do
       mkhandle    ∷ μ (ℍ, 𝕄 CompressorThread)
       mkhandle    = do
         mv_files ← fileNumberedMoves fn opts (st ⊣ 𝕙May)
-        tid' ← liftIO $ firstJust ⊳ forM (reverse mv_files)
-                                         (mv_compress $ opts ⊣ perms)
+        compressor_thread ← liftIO$ firstJust ⊳ forM (reverse mv_files)
+                                                     (mvCompress $ opts ⊣ perms)
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => File → μ ℍ
             open_file =
               ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ perms)
         ẖ ∷ ℍ ← open_file ((filenameGenerator opts) fn (𝓝∷𝕄 MaxFiles))
-        return (ẖ, tid')
+        return (ẖ, compressor_thread)
 
   -- is there a compressor currently running?
   thread_is_running ← liftIO $ case st ⊣ compressorThreadMay of
@@ -1581,10 +1639,6 @@ fileSizeRotatorTests =
                     , "abc" -- 4 bytes: should be a new file
                     , "defghijkl" -- 10 bytes: should be another new file
                     , "mnopqrstuvwxyz" -- 15 bytes: should be unbroken
-                    {- , "αβγδεζηθικλ"
-                    , "μνξ"
-                    , "πρσ"
-                    , "τφχ" -}
                     ]
         directoryList @FPathIOError @FPathIOError def d
 
@@ -1651,7 +1705,6 @@ fileSizeRotatorTests =
                    assertEqual "directories" [d] (fst ⊳ ds)
                )
           -- , ("listdir", \ (d,_)→listdirStdOut def d⪼ assertSuccess "listdir")
-{- XXX FIX THESE
              , ("logfile names", \ (d,(fs,_,_,_)) →
                    case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
                      𝓛 e   → assertFailure $ show e
@@ -1674,7 +1727,6 @@ fileSizeRotatorTests =
                                 ]
                    assertEqual "file sizes" expect sizes
                )
--}
              ]
              {- ◇ ((\ (i∷ℕ,fn∷RelFile) → ("cat " ◇ show i, \ (d,_) → do
                    ѥ (readFileUTF8Lenient @IOError fn) ≫ \ case
@@ -1708,23 +1760,24 @@ fileSizeRotatorTests =
 -- `Data.Time.LocalTime.LocalTime`
 -- XXX fileTimeRotator ∷ ∀ τ ω μ . (MonadIO μ, σ ~ (𝕄 ℍ,𝕄 RelFile,𝕄 ThreadId)) =>
 -- XXX what happens if we start logging to an extant file?
+-- XXX use EMonad and friends?
 fileTimeRotator_ ∷ ∀ τ ω μ . MonadIO μ =>
                    FileTimeRotatorOptions τ
-                   -- | time of the log (pulling it out of the log message(s) is
-                   --   hard, and it's unclear how to handle groups of messages -
-                   --   use the latest or the earliest? - and this makes testing
-                   --   easier, so we hand in an explicit time
                  → -- | basename of the file to use for logging to; e.g.,
                    --   [pathComponent|logfile|]
                    PathComponent
-                 → τ
-                   -- | incoming state; should be 𝓝 at first, will be
+                 → -- | time of the log (pulling it out of the log message(s) is
+                   --   hard, and it's unclear how to handle groups of messages:
+                   --   use the latest or the earliest? - and this makes testing
+                   --   easier, so we hand in an explicit time
+                   τ
+                 → -- | incoming state; should be 𝓝 at first, will be
                    --   self-managed for recursion
-                 → 𝕄 FileTimeRotatorState
-                 → ω                               -- ^ SimpleDocStream (unused)
-                   -- | rendered text to write (used to calculate whether to
+                   𝕄 FileTimeRotatorState
+                 → ω -- ^ SimpleDocStream (unused)
+                 → -- | rendered text to write (used to calculate whether to
                    --   rotate)
-                 → 𝕋
+                   𝕋
                  → μ (Handle,FileTimeRotatorState) -- ^ new handle & state
 
 
@@ -1738,23 +1791,39 @@ fileTimeRotator_ opts pc_ d st_ _sds t = do
       cur_pc = basename ∘ view hname ⊳ (st ⊣ 𝕙May) ≫ (⩼ _RelFile_)
 
       mkhandle    ∷ AbsFile → μ (ℍ, 𝕄 CompressorThread)
-      mkhandle afn  = do
+      mkhandle afn  = traceShow ("fileTimeRotator_∷mkhandle", afn) $ do
+        (cmprs,rms) ← ѥ (fileCompressClean opts) ≫ \ case
+          𝓡 (cmprs,rms) → return (cmprs,rms)
+          𝓛 (e ∷ FPathIOError) → do
+            stdErr $ [fmt|error compressing/cleaning old logs: %T|] e
+            return (𝓝,[])
         -- XXX just clean up & compress old files
         {- mv_files ← fileNumberedMoves max_files fngen ɦ compress
-        tid' ← liftIO $ firstJust ⊳ forM (reverse mv_files) (mv_compress file_perms)
+        tid' ← liftIO $ firstJust ⊳ forM (reverse mv_files) (mvCompress file_perms)
         -}
+        traceShow ("fileTimeRotator_∷mkhandle (rms)", rms) $ forM_ rms $ \ f →
+                  ѥ (unlink f) ≫ \ case
+                    𝓡 ()            → return ()
+                    𝓛 (e ∷ IOError) → stdErr $ [fmt|error unlinking %T: %T|] f e
+
+        compressor_thread ← case cmprs of
+          𝓝         → return 𝓝
+          𝓙 (fn',c) →
+            𝓙 ⊳ asyncCompressorThread c (opts ⊣ perms) (FPath.File.FileA fn')
+
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => AbsFile → μ ℍ
             open_file =
               ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ perms)
         ẖ ∷ ℍ ← open_file afn
-        return (ẖ, 𝓝) -- return XXX (ẖ, tid')
+        return (ẖ, compressor_thread) -- return XXX (ẖ, tid')
 
   -- is there a compressor currently running?
   thread_is_running ← liftIO $ case st ⊣ compressorThreadMay of
                                  𝓝   → return ThreadIsNotRunning
                                  𝓙 ŧ → threadIsRunning ŧ
 
+  listdirStdOut def (opts ⊣ absDir_)
   case st ⊣ 𝕙May of
     𝓙 𝕙 → if and [ -- no extant thread
                    thread_is_running ≠ ThreadIsRunning
@@ -1770,11 +1839,152 @@ fileTimeRotator_ opts pc_ d st_ _sds t = do
                    , isJust $ st ⊣ compressorThreadMay ]
             then -- dump the thread (it's now done)
                  return (𝕙 ⊣ handle,st & compressorThreadMay ⊢ 𝓝)
-            else -- just update the bytes written
-                 return (𝕙 ⊣ handle,st)
+            else return (𝕙 ⊣ handle,st)
 
     𝓝   → -- no extant handle, so create one
            mkhandle fn ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle, mkFTRSt (𝕙',ṯ))
+
+----------------------------------------
+
+fileTimeRotatorTests ∷ TestTree
+fileTimeRotatorTests =
+  let nil       = const $ return ()
+      do_log    ∷ 𝕄 Compressor → AbsDir
+                → IO ([(AbsFile, FStat)], [(AbsDir, FStat)],
+                      [(AbsFile, FPathIOError)],
+                      [(AbsDir, FPathIOError)]
+                     )
+      do_log c d  = ж @IOError ∘ inDir d $ do
+        let opts    = let pcre = mkGlobRegex ("logfile-.*"∷𝕊)
+                      in  mkFileTimeRotatorOptions d pcre & compressorMay ⊢ c
+                                                          & maxFiles      ⊢ 3
+            rot x   =
+              \ st w t → do
+                (h,st') ← fileTimeRotator_ opts ([pc|logfile|])
+                                          (fromOrdinalDate 2026 x) st w t
+                traceShow ("fileTimeRotator_ state",st') $ return (h,st')
+            bopts   = BatchingOptions { flushMaxDelay = 1
+                                      , blockWhenFull = 𝓣
+                                      , flushMaxQueueSize = 1
+                                      }
+        -- we need to turn off batching here for predictable results
+        logToFiles' (𝓙 bopts) [] [] (rot 252) $ mapM_ (warnT @())
+                    [ "deleted??" -- this should get rotated away into the ether
+                    ]
+        logToFiles' (𝓙 bopts) [] [] (rot 253) $ mapM_ (warnT @())
+                    [ "123"
+                    , "456"
+                    , "7"
+                    , "abc"
+                    ]
+        logToFiles' (𝓙 bopts) [] [] (rot 254) $ mapM_ (warnT @())
+                    [ "αβγδεζηθικλ"
+                    , "μνξ"
+                    , "πρσ"
+                    , "τφχ"
+                    ]
+        -- x ≡ 255 → 2026-09-12
+        logToFiles' (𝓙 bopts) [] [] (rot 255) $ mapM_ (warnT @())
+                    [ "defghijkl" -- 10 bytes: should be another new file
+                    , "mnopqrstuvwxyz" -- 15 bytes: should be unbroken
+                    ]
+        directoryList @FPathIOError @FPathIOError def d
+
+  in  dependentTestGroup "simpleTimeRotator" AllSucceed $
+        [ testsWithTempDir'' "no-compression" __tempdir__
+            ((◇ [pc|-|]) ⊳ __progNamePrefix__) (do_log 𝓝) nil nil
+            ([ ("check", const $ assertSuccess "check")
+             , ("no file errors", \ (_,(_,_,efs,_)) →
+                   assertEqual "file errors" [] efs
+               )
+             , ("no directory errors", \ (_,(_,_,_,dfs)) →
+                   assertEqual "directory errors" [] dfs
+               )
+             , ("no subdirectories", \ (d,(_,ds,_,_)) →
+                   assertEqual "directories" [d] (fst ⊳ ds)
+               )
+             , ("listdir", \ (d,_)→listdirStdOut def d⪼assertSuccess "listdir")
+             , ("logfile names", \ (d,(fs,_,_,_)) →
+                   case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
+                     𝓛 e   → assertFailure $ show e
+                     𝓡 fs' → let expect = [ [relfile|logfile-2026-09-10|]
+                                          , [relfile|logfile-2026-09-11|]
+                                          , [relfile|logfile-2026-09-12|]
+                                          ]
+                             in  assertEqual "files" expect (sort fs')
+               )
+
+             , ("logfile sizes", \ (_,(fs,_,_,_)) → do
+                   let sizes  = sortOn fst $ bimap basename size ⊳ fs
+                       expect = [ ([relfile|logfile-2026-09-10|],14)
+                                , ([relfile|logfile-2026-09-11|],24)
+                                , ([relfile|logfile-2026-09-12|],25)
+                                ]
+                   assertEqual "file sizes" expect sizes
+               )
+             ]
+             {- ◇ ((\ (i∷ℕ,fn∷RelFile) → ("cat " ◇ show i, \ (d,_) → do
+                   ѥ (readFileUTF8Lenient @IOError fn) ≫ \ case
+                     𝓛 e → liftIO $ assertFailure (show e)
+                     𝓡 t → liftIO $ do
+                       putStrLn ("---- " ◇ T.pack (show fn) ◇ "----")
+                       putStrLn t
+                       putStrLn "----"
+                       assertSuccess ("cat" ◇ T.pack (show i))
+               )) ⊳ [ (0,[relfile|logfile.0|])
+                    , (1,[relfile|logfile.1|])
+                    , (2,[relfile|logfile.2|])
+                    ])
+             -}
+            )
+
+        , testsWithTempDir'' "with-compression" __tempdir__
+            ((◇ [pc|-|]) ⊳ __progNamePrefix__) (do_log(𝓙 compressPzstd)) nil nil
+            ([ ("check", const $ assertSuccess "check")
+             , ("no file errors", \ (_,(_,_,efs,_)) →
+                   assertEqual "file errors" [] efs
+               )
+             , ("no directory errors", \ (_,(_,_,_,dfs)) →
+                   assertEqual "directory errors" [] dfs
+               )
+             , ("no subdirectories", \ (d,(_,ds,_,_)) →
+                   assertEqual "directories" [d] (fst ⊳ ds)
+               )
+          -- , ("listdir", \ (d,_)→listdirStdOut def d⪼ assertSuccess "listdir")
+             , ("logfile names", \ (d,(fs,_,_,_)) →
+                   case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
+                     𝓛 e   → assertFailure $ show e
+                     𝓡 fs' → let expect = [ [relfile|logfile-2026-09-10.zst|]
+                                          , [relfile|logfile-2026-09-11.zst|]
+                                          , [relfile|logfile-2026-09-12|]
+                                          ]
+                             in  assertEqual "files" expect (sort fs')
+               )
+
+             , ("logfile sizes", \ (_,(fs,_,_,_)) → do
+                   let sizes  = sortOn fst $ bimap basename size ⊳ fs
+                       expect = [ ([relfile|logfile-2026-09-10.zst|],39)
+                                , ([relfile|logfile-2026-09-11.zst|],49)
+                                , ([relfile|logfile-2026-09-12|],25)
+                                ]
+                   assertEqual "file sizes" expect sizes
+               )
+             ]
+             {- ◇ ((\ (i∷ℕ,fn∷RelFile) → ("cat " ◇ show i, \ (d,_) → do
+                   ѥ (readFileUTF8Lenient @IOError fn) ≫ \ case
+                     𝓛 e → liftIO $ assertFailure (show e)
+                     𝓡 t → liftIO $ do
+                       putStrLn ("---- " ◇ T.pack (show fn) ◇ "----")
+                       putStrLn t
+                       putStrLn "----"
+                       assertSuccess ("cat" ◇ T.pack (show i))
+               )) ⊳ [ (0,[relfile|logfile.0|])
+                    , (1,[relfile|logfile.1|])
+                    , (2,[relfile|logfile.2|])
+                    ])
+             -}
+            )
+        ]
 
 ----------------------------------------
 
@@ -2055,8 +2265,8 @@ logToFiles' opts ls trx rt io = do
  (r,st) ← logToHandlesNoAdornments rt opts lro trx io
  -- if there's any compressors running, wait for them
  case st ⊣ compressorThreadMay of
-   𝓝    → return ()
-   𝓙 ct → waitAsync ct
+   𝓝    → traceShow("logToFiles':no compressor") $ return ()
+   𝓙 ct → traceShow("logToFiles':wait for compressor") $ waitAsync ct
  return r
 
 ----------------------------------------
@@ -2167,7 +2377,9 @@ _log1io = do logIO @𝕋 Warning 1 "start"
 -- tests -------------------------------
 
 tests ∷ TestTree
-tests = testGroup "Log" [ logRender'Tests, eMonadTests, fileSizeRotatorTests ]
+tests = dependentTestGroup "Log" AllSucceed
+          [ logRender'Tests, eMonadTests
+          , fileSizeRotatorTests, fileTimeRotatorTests ]
 
 ----------------------------------------
 
