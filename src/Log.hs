@@ -29,8 +29,8 @@ where
 -- XXX factor out rotators to separate modules
 -- XXX move some functions to other modules
 
-import Prelude  ( error, undefined ) -- XXX
-import Debug.Trace  ( traceShow, trace ) -- XXX
+-- import Prelude  ( error, undefined ) -- XXX
+-- import Debug.Trace  ( traceShow, trace ) -- XXX
 
 -- async -------------------------------
 
@@ -1141,7 +1141,7 @@ fileCompressClean {- XXX fn -} opts = do
       rms    ∷ [AbsFile] = -- ⊟ 1 to account for the file we're about to write
         dropEnd (fromIntegral $ (unMaxFiles max_files)⊟1) fns
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
-  traceShow("fileCompressClean.return", fns, cmprss, rms, lastMay fns, max_files) $ return (cmprss, rms) -- XXX
+  return (cmprss, rms) -- XXX
 
 ------------------------------------------------------------
 
@@ -1447,7 +1447,7 @@ dayFilenameGenerator =
   let formatDate = formatTime defaultTimeLocale "-%Y-%m-%d"
       pcDate     = __parseS__ ∘ formatDate
   in  TimeFilenameGenerator { _tfg_name = "dayFilenameGenerator"
-                            , _tfg_fngen = \ pc_ d → traceShow ("dayFilenameGenerator", d, pc_, pcDate d) $ pc_ ◇ pcDate d }
+                            , _tfg_fngen = \ pc_ d → pc_ ◇ pcDate d }
 
 ------------------------------------------------------------
 
@@ -1791,7 +1791,7 @@ fileTimeRotator_ opts pc_ d st_ _sds t = do
       cur_pc = basename ∘ view hname ⊳ (st ⊣ 𝕙May) ≫ (⩼ _RelFile_)
 
       mkhandle    ∷ AbsFile → μ (ℍ, 𝕄 CompressorThread)
-      mkhandle afn  = traceShow ("fileTimeRotator_∷mkhandle", afn) $ do
+      mkhandle afn  = do
         (cmprs,rms) ← ѥ (fileCompressClean opts) ≫ \ case
           𝓡 (cmprs,rms) → return (cmprs,rms)
           𝓛 (e ∷ FPathIOError) → do
@@ -1801,7 +1801,7 @@ fileTimeRotator_ opts pc_ d st_ _sds t = do
         {- mv_files ← fileNumberedMoves max_files fngen ɦ compress
         tid' ← liftIO $ firstJust ⊳ forM (reverse mv_files) (mvCompress file_perms)
         -}
-        traceShow ("fileTimeRotator_∷mkhandle (rms)", rms) $ forM_ rms $ \ f →
+        forM_ rms $ \ f →
                   ѥ (unlink f) ≫ \ case
                     𝓡 ()            → return ()
                     𝓛 (e ∷ IOError) → stdErr $ [fmt|error unlinking %T: %T|] f e
@@ -1823,7 +1823,6 @@ fileTimeRotator_ opts pc_ d st_ _sds t = do
                                  𝓝   → return ThreadIsNotRunning
                                  𝓙 ŧ → threadIsRunning ŧ
 
-  listdirStdOut def (opts ⊣ absDir_)
   case st ⊣ 𝕙May of
     𝓙 𝕙 → if and [ -- no extant thread
                    thread_is_running ≠ ThreadIsRunning
@@ -1862,7 +1861,7 @@ fileTimeRotatorTests =
               \ st w t → do
                 (h,st') ← fileTimeRotator_ opts ([pc|logfile|])
                                           (fromOrdinalDate 2026 x) st w t
-                traceShow ("fileTimeRotator_ state",st') $ return (h,st')
+                return (h,st')
             bopts   = BatchingOptions { flushMaxDelay = 1
                                       , blockWhenFull = 𝓣
                                       , flushMaxQueueSize = 1
@@ -1903,7 +1902,7 @@ fileTimeRotatorTests =
              , ("no subdirectories", \ (d,(_,ds,_,_)) →
                    assertEqual "directories" [d] (fst ⊳ ds)
                )
-             , ("listdir", \ (d,_)→listdirStdOut def d⪼assertSuccess "listdir")
+          -- , ("listdir", \ (d,_)→listdirStdOut def d⪼assertSuccess "listdir")
              , ("logfile names", \ (d,(fs,_,_,_)) →
                    case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
                      𝓛 e   → assertFailure $ show e
@@ -2265,8 +2264,8 @@ logToFiles' opts ls trx rt io = do
  (r,st) ← logToHandlesNoAdornments rt opts lro trx io
  -- if there's any compressors running, wait for them
  case st ⊣ compressorThreadMay of
-   𝓝    → traceShow("logToFiles':no compressor") $ return ()
-   𝓙 ct → traceShow("logToFiles':wait for compressor") $ waitAsync ct
+   𝓝    → return ()
+   𝓙 ct → waitAsync ct
  return r
 
 ----------------------------------------
