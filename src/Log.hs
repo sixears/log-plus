@@ -29,7 +29,7 @@ where
 -- XXX factor out rotators to separate modules
 -- XXX move some functions to other modules
 
--- import Prelude  ( error, undefined ) -- XXX
+import Prelude  ( error {- XXX , undefined -} )
 -- import Debug.Trace  ( traceShow, trace ) -- XXX
 
 -- async -------------------------------
@@ -41,7 +41,7 @@ import Control.Concurrent.Async  ( Async, async, poll, wait )
 import qualified  Data.Foldable  as  Foldable
 
 import Control.Applicative      ( Applicative( (<*>), pure ) )
-import Control.Concurrent       ( ThreadId, forkIO, threadDelay )
+import Control.Concurrent       ( threadDelay )
 import Control.Concurrent.MVar  ( MVar, tryReadMVar, newEmptyMVar, newMVar
                                 , readMVar, swapMVar )
 import Control.Monad            ( Monad( (>>=) )
@@ -60,13 +60,8 @@ import Data.Monoid              ( Monoid )
 import Data.Ord                 ( Ord, (>) )
 import Data.Semigroup           ( Semigroup )
 import Data.String              ( IsString, String )
-import Data.Type.Equality       ( type(~) )
 import Data.Tuple               ( fst, snd, uncurry )
-import Data.Word                ( Word16, Word64 )
-import GHC.Conc.Sync            ( ThreadStatus( ThreadBlocked, ThreadDied
-                                              , ThreadFinished, ThreadRunning )
-                                , threadStatus
-                                )
+import Data.Word                ( Word8, Word16, Word64 )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( Item, fromList, toList ) )
 import GHC.Generics             ( Generic )
@@ -109,7 +104,7 @@ import Control.Monad.Catch  ( MonadMask )
 
 -- extra -------------------------------
 
-import Data.List.Extra  ( dropEnd, takeEnd )
+import Data.List.Extra  ( dropEnd )
 
 -- fstat -------------------------------
 
@@ -123,13 +118,11 @@ import FPath                   ( (⫻), stripDirFPE )
 import FPath.AbsDir            ( AbsDir )
 import FPath.AbsFile           ( AbsFile, absfile )
 import FPath.Basename          ( basename )
-import FPath.Dir               ( Dir )
 import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
-import FPath.File              ( File )
 import FPath.FileLike          ( FileLike, (⊙) )
 import FPath.Parseable         ( __parseS__ )
 import FPath.PathComponent     ( PathComponent, pc )
-import FPath.RelFile           ( RelFile, _RelFile_, relfile )
+import FPath.RelFile           ( _RelFile_, relfile )
 
 -- lens --------------------------------
 
@@ -156,16 +149,15 @@ import MonadError.IO.Error  ( AsIOError, IOError, _IOErr )
 
 -- monadio-plus ------------------------
 
-import MonadIO.Directory              ( GlobPCRERegex, __pwd__, directoryList
-                                      , glob, inDir, listdirStdOut, mkGlobRegex
+import MonadIO.Directory              ( GlobPCRERegex, directoryList, glob
+                                      , inDir, listdirStdOut, mkGlobRegex
                                       )
 import MonadIO.Error.CreateProcError  ( ProcError )
 import MonadIO.File                   ( chmod, devnull, rename, unlink )
 import MonadIO.FStat                  ( FExists( FExists ), lfexists )
 import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
                                         handle, hClose, hname )
-import MonadIO.OpenFile               ( FileOpenMode( FileR, FileW ), openFile
-                                      , readFileUTF8Lenient )
+import MonadIO.OpenFile               ( FileOpenMode( FileR, FileW ), openFile )
 import MonadIO.Process                ( doProc )
 import MonadIO.Process.CmdSpec        ( mkCmd )
 import MonadIO.Temp                   ( __progNamePrefix__, __tempdir__
@@ -203,7 +195,7 @@ import Control.Monad.Identity  ( runIdentity )
 
 import Natural            ( (⊟) )
 import Natural.Length     ( щ )
-import Natural.Replicate  ( drop_, replicate_ )
+import Natural.Replicate  ( replicate_ )
 import Natural.Unsigned   ( I64, Unsigned, ɨ )
 
 -- parsec-plus -------------------------
@@ -260,8 +252,7 @@ import qualified  System.Console.Terminal.Size  as  TerminalSize
 import Data.Text      qualified as  T
 import Data.Text.Lazy qualified
 
-import Data.Text     ( intercalate, length, lines, unlines )
-import Data.Text.IO  ( hPutStr, hPutStrLn, putStrLn )
+import Data.Text.IO  ( hPutStr, hPutStrLn )
 
 -- text-format -------------------------
 
@@ -335,13 +326,13 @@ class HasName α where
 ------------------------------------------------------------
 
 {-| takes from,to filenames and does the deed -}
-newtype CompressorIO = CompressorIO { unCompressorIO ∷ File → File → IO () }
+newtype CompressorIO = CompressorIO { unCompressorIO ∷ AbsFile→AbsFile→IO () }
 
 ------------------------------------------------------------
 
 class HasCompressorIO α where
   compressorIO ∷ Lens' α CompressorIO
-  compressorIOF ∷ Lens' α (File → File → IO())
+  compressorIOF ∷ Lens' α (AbsFile → AbsFile → IO())
   compressorIOF = lens (unCompressorIO ∘ view compressorIO)
                        (\ a f → a & compressorIO ⊢ CompressorIO f)
 
@@ -358,7 +349,7 @@ class HasFilenameExtension α where
   filenameExtensionPC ∷ Lens' α PathComponent
   filenameExtensionPC =
     lens (unFilenameExtension ∘ view filenameExtension)
-         (\ a pc → a & filenameExtension ⊢ FilenameExtension pc)
+         (\ a p → a & filenameExtension ⊢ FilenameExtension p)
   {-| append this extension to an existing PathComponent -}
   appendExtension     ∷ FileLike γ => α → γ → γ
   appendExtension a f = f ⊙ (a ⊣ filenameExtensionPC)
@@ -1011,9 +1002,8 @@ takeWhileM p (x:xs)= p x ≫ \ b → if b then (x:) ⊳ takeWhileM p xs else ret
 
 ----------------------------------------
 
-pzstd ∷ MonadIO μ => File → File → ExceptT ProcError μ ()
+pzstd ∷ MonadIO μ => AbsFile → AbsFile → ExceptT ProcError μ ()
 pzstd f t = do
-  p ← __pwd__
   let args = ["--quiet", "--check", toText f, "-o", toText t, "--rm"]
       exe  = Paths.pzstd
   null ← devnull
@@ -1022,7 +1012,7 @@ pzstd f t = do
 
 ----------------------------------------
 
-pzstdIO ∷ File → File → IO ()
+pzstdIO ∷ AbsFile → AbsFile → IO ()
 pzstdIO f t = join $ eToStderrIO ⊳ (ѥ @ProcError $ pzstd f t)
 
 ----------------------------------------
@@ -1038,9 +1028,9 @@ firstJust (𝓝 : xs)    = firstJust xs
 {-| spawn a thread that runs a compressor, and fixes up the file permissions
     after -}
 asyncCompressorThread ∷ (MonadIO μ, HasCompressorIO δ, HasFilenameExtension δ) =>
-                        δ → FileMode → File → μ CompressorThread
+                        δ → FileMode → AbsFile → μ CompressorThread
 asyncCompressorThread c file_perms to = liftIO $
-  let c' ∷ File → File → IO ()
+  let c' ∷ AbsFile → AbsFile → IO ()
       c' = \ from_ to_ → do (c ⊣ compressorIOF) from_ to_
                             ж $ chmod @IOError file_perms to_
       ext = c ⊣ filenameExtensionPC
@@ -1057,7 +1047,7 @@ asyncCompressorThread c file_perms to = liftIO $
     `chmod` the resultant file to `file_perms`.  We do not `chmod` the `to` file
     if there is no compressor.
 -}
-mvCompress ∷ FileMode → (File,File,𝕄 Compressor) → IO (𝕄 CompressorThread)
+mvCompress ∷ FileMode → (AbsFile,AbsFile,𝕄 Compressor) → IO (𝕄 CompressorThread)
 mvCompress file_perms (from,to,do_compress) = do
   ꙝ' $ rename @IOError from to
   case do_compress of
@@ -1087,22 +1077,27 @@ threadIsRunning x = liftIO $
 -}
 -- XXX how are we checking for which files need compressing?
 -- XXX use EMonad and friends?
-fileNumberedMoves ∷ MonadIO μ => File → FileSizeRotatorOptions → 𝕄 ℍ
-                               → μ [(File, File, 𝕄 Compressor)]
-fileNumberedMoves fn opts ɦ  =
+fileNumberedMoves ∷ MonadIO μ => AbsFile → FileSizeRotatorOptions → 𝕄 ℍ
+                               → μ [(AbsFile, AbsFile, 𝕄 Compressor)]
+fileNumberedMoves fn opts ɦ =
   let compress    = opts ⊣ compressorMay
       fngen       = filenameGenerator opts
       max_files   = opts ⊣ maxFiles
       fngen' i    = maybe id appendExtension compress $ fngen fn i
       fn_nums     = 𝓙 ⊳ [0..(max_files-1)] -- -1 because we start at 0
       fn_pairs    = (over both fngen') ⊳ zip fn_nums (tailSafe fn_nums)
-      init_fnpair = (maybe (fngen fn 𝓝) (view hname) ɦ,fngen fn (𝓙 0),compress)
+      abs_hname h =
+        case h ⊣ hname of
+          FPath.File.FileA a → a
+          FPath.File.FileR r →
+            error $ [fmt|relative file in hname: this should never happen %T|] r
+      init_fnpair = (maybe (fngen fn 𝓝) abs_hname ɦ,fngen fn (𝓙 0),compress)
       -- `proto_moves` is the list of potential files to move, before filtering
       -- on whether they actually exist
       -- only compress when making the first archive file
       proto_moves = init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
   in  flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
-        (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
+                                    (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
 
 ----------------------------------------
 
@@ -1117,21 +1112,11 @@ fileNumberedMoves fn opts ɦ  =
 -- XXX how are we checking for which files need compressing?
 -- XXX use EMonad and friends?
 fileCompressClean ∷ (MonadIO μ, AsIOError ε, AsFPathError ε, MonadError ε μ) =>
-                    {- XXX File → -} FileTimeRotatorOptions τ
+                    FileTimeRotatorOptions τ
                   → μ (𝕄 (AbsFile, Compressor), [AbsFile])
-fileCompressClean {- XXX fn -} opts = do
+fileCompressClean opts = do
   let compress    = opts ⊣ compressorMay
-      -- XXX fngen       = filenameGenerator opts
       max_files   = opts ⊣ maxFiles
-      -- XXX fngen' i    = maybe id appendExtension compress $ fngen fn i
-      -- XXX fn_nums     = 𝓙 ⊳ [0..(max_files-1)] -- -1 because we start at 0
-      -- XXX fn_pairs    = (over both fngen') ⊳ zip fn_nums (tailSafe fn_nums)
-      -- XXX init_fnpair = (maybe (fngen fn 𝓝) (view hname) ɦ,fngen fn (𝓙 0),compress)
-      -- `proto_moves` is the list of potential files to move, before filtering
-      -- on whether they actually exist
-      -- only compress when making the first archive file
-      -- XXX proto_moves = init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
-      -- XXX flip takeWhileM proto_moves $ \ (from,_to,_do_compress) → (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
   (fes,des,errs) ← glob (opts ⊣ globPCRERegex) (opts ⊣ absDir_)
   forM_ des $ \ (d,_st) → liftIO $ do
     hPutStrLn stderr $ [fmt|ignoring globbed directory: %T|] d
@@ -1141,11 +1126,11 @@ fileCompressClean {- XXX fn -} opts = do
       rms    ∷ [AbsFile] = -- ⊟ 1 to account for the file we're about to write
         dropEnd (fromIntegral $ (unMaxFiles max_files)⊟1) fns
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
-  return (cmprss, rms) -- XXX
+  return (cmprss, rms)
 
 ------------------------------------------------------------
 
-class HasℍMay      α where 𝕙May ∷ Lens' α (𝕄 ℍ)
+class HasℍMay α where 𝕙May ∷ Lens' α (𝕄 ℍ)
 
 ------------------------------------------------------------
 
@@ -1243,14 +1228,6 @@ class MakeFileTimeRotatorState α where mkFTRSt ∷ α → FileTimeRotatorState
 instance MakeFileTimeRotatorState (ℍ, 𝕄 CompressorThread) where
   mkFTRSt (h,t) = FileTimeRotatorState (𝓙 h) t
 
-{- XXX
-
-----------
-
-instance MakeFileTimeRotatorState (ℍ, 𝕄 PathComponent, 𝕄 CompressorThread) where
-  mkFTRSt (h,s,t) = FileTimeRotatorState (𝓙 h) s t
--}
-
 ------------------------------------------------------------
 
 newtype MaxFiles = MaxFiles { unMaxFiles ∷ Word16 } deriving (Enum,Num,Show)
@@ -1284,7 +1261,7 @@ class FilenameGenerator α β where
 
 ------------------------------------------------------------
 
-type NumberedFnGen = File → 𝕄 MaxFiles → File
+type NumberedFnGen = AbsFile → 𝕄 MaxFiles → AbsFile
 
 data NumberedFilenameGenerator =
   NumberedFilenameGenerator
@@ -1335,7 +1312,7 @@ class HasMaxFileSize α where maxFileSize ∷ Lens' α MaxFileSize
     `mxf` -}
 simpleNumberedFilenameGenerator ∷ MaxFiles → NumberedFilenameGenerator
 simpleNumberedFilenameGenerator mxf =
-  let name = "simpleNumberedFilenameGenerator (" ◇ show mxf ◇ ")"
+  let name_ = "simpleNumberedFilenameGenerator (" ◇ show mxf ◇ ")"
       parsePC = __parseS__ @PathComponent
       go_ fn 𝓝    = fn
       go_ fn (𝓙 i) =
@@ -1355,7 +1332,7 @@ simpleNumberedFilenameGenerator mxf =
 
         in  (fn ⊙) ∘ parsePC ∘ num $ fromIntegral (unMaxFiles i)
 
-  in  NumberedFilenameGenerator name go_
+  in  NumberedFilenameGenerator name_ go_
 
 ------------------------------------------------------------
 
@@ -1433,7 +1410,7 @@ mkFileSizeRotatorOptions ∷ MaxFiles → FileSizeRotatorOptions
 mkFileSizeRotatorOptions mxf =
   let fngen = simpleNumberedFilenameGenerator mxf
   in  FileSizeRotatorOptions { _fsro_cmprss = 𝓙 compressPzstd
-                             , _fsro_mxsz   = 100 × 1_024^3 -- 100MiB
+                             , _fsro_mxsz   = 100 × 1_024^(3∷Word8) -- 100MiB
                              , _fsro_perms  = 0o644
                              , _fsro_mxfs   = mxf
                              , _fsro_fngen  = fngen
@@ -1556,7 +1533,7 @@ mkFileTimeRotatorOptions dir pcre =
 -- XXX use EMonad and friends?
 fileSizeRotator ∷ ∀ ω μ . MonadIO μ =>
                   FileSizeRotatorOptions
-                → File                   -- ^ base filename (passed to `fngen`)
+                → AbsFile                -- ^ base filename (passed to `fngen`)
                 → 𝕄 FileSizeRotatorState -- ^ incoming state; should be 𝓝 at
                                          --   first, will be self-managed for
                                          --   recursion
@@ -1577,7 +1554,7 @@ fileSizeRotator opts fn st_ _sds t = do
         compressor_thread ← liftIO$ firstJust ⊳ forM (reverse mv_files)
                                                      (mvCompress $ opts ⊣ perms)
         let -- open a file, mode 0644, raise if it fails
-            open_file ∷ MonadIO μ => File → μ ℍ
+            open_file ∷ MonadIO μ => AbsFile → μ ℍ
             open_file =
               ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ perms)
         ẖ ∷ ℍ ← open_file ((filenameGenerator opts) fn (𝓝∷𝕄 MaxFiles))
@@ -1625,7 +1602,7 @@ fileSizeRotatorTests =
         let opts    = (mkFileSizeRotatorOptions 10) & compressorMay ⊢ c
                                                     & maxFileSize   ⊢ 10
                                                     & maxFiles      ⊢ 3
-            rot     = fileSizeRotator opts (FPath.File.FileR [relfile|logfile|])
+            rot     = fileSizeRotator opts (d ⫻ [relfile|logfile|])
             bopts   = BatchingOptions { flushMaxDelay = 1
                                       , blockWhenFull = 𝓣
                                       , flushMaxQueueSize = 1
@@ -1758,7 +1735,7 @@ fileSizeRotatorTests =
 
 -- τ is the time type, e.g. `Data.Time.Clock.UTCTime` or
 -- `Data.Time.LocalTime.LocalTime`
--- XXX fileTimeRotator ∷ ∀ τ ω μ . (MonadIO μ, σ ~ (𝕄 ℍ,𝕄 RelFile,𝕄 ThreadId)) =>
+
 -- XXX what happens if we start logging to an extant file?
 -- XXX use EMonad and friends?
 fileTimeRotator_ ∷ ∀ τ ω μ . MonadIO μ =>
@@ -1769,25 +1746,24 @@ fileTimeRotator_ ∷ ∀ τ ω μ . MonadIO μ =>
                  → -- | time of the log (pulling it out of the log message(s) is
                    --   hard, and it's unclear how to handle groups of messages:
                    --   use the latest or the earliest? - and this makes testing
-                   --   easier, so we hand in an explicit time
+                   --   easier, so we hand in an explicit time; use, e.g.,
+                   --   `Data.Time.Clock.UTCTime` or
+                   --   `Data.Time.LocalTime.LocalTime`
                    τ
                  → -- | incoming state; should be 𝓝 at first, will be
                    --   self-managed for recursion
                    𝕄 FileTimeRotatorState
                  → ω -- ^ SimpleDocStream (unused)
-                 → -- | rendered text to write (used to calculate whether to
-                   --   rotate)
-                   𝕋
+                 → 𝕋 -- ^ rendered text to write (unused)
                  → μ (Handle,FileTimeRotatorState) -- ^ new handle & state
 
 
--- XXX use pc_
-fileTimeRotator_ opts pc_ d st_ _sds t = do
+fileTimeRotator_ opts pc_ d st_ _sds _t = do
   let st = st_ ⧏ def
       -- type sig required to disambiguate
-      pc ∷ PathComponent
-      pc = (filenameGenerator opts) pc_ d
-      fn = opts ⊣ absDir_ ⫻ pc ⊣ re _RelFile_
+      pc' ∷ PathComponent
+      pc' = (filenameGenerator opts) pc_ d
+      fn = opts ⊣ absDir_ ⫻ pc' ⊣ re _RelFile_
       cur_pc = basename ∘ view hname ⊳ (st ⊣ 𝕙May) ≫ (⩼ _RelFile_)
 
       mkhandle    ∷ AbsFile → μ (ℍ, 𝕄 CompressorThread)
@@ -1797,10 +1773,6 @@ fileTimeRotator_ opts pc_ d st_ _sds t = do
           𝓛 (e ∷ FPathIOError) → do
             stdErr $ [fmt|error compressing/cleaning old logs: %T|] e
             return (𝓝,[])
-        -- XXX just clean up & compress old files
-        {- mv_files ← fileNumberedMoves max_files fngen ɦ compress
-        tid' ← liftIO $ firstJust ⊳ forM (reverse mv_files) (mvCompress file_perms)
-        -}
         forM_ rms $ \ f →
                   ѥ (unlink f) ≫ \ case
                     𝓡 ()            → return ()
@@ -1809,14 +1781,14 @@ fileTimeRotator_ opts pc_ d st_ _sds t = do
         compressor_thread ← case cmprs of
           𝓝         → return 𝓝
           𝓙 (fn',c) →
-            𝓙 ⊳ asyncCompressorThread c (opts ⊣ perms) (FPath.File.FileA fn')
+            𝓙 ⊳ asyncCompressorThread c (opts ⊣ perms) fn'
 
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => AbsFile → μ ℍ
             open_file =
               ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ perms)
         ẖ ∷ ℍ ← open_file afn
-        return (ẖ, compressor_thread) -- return XXX (ẖ, tid')
+        return (ẖ, compressor_thread)
 
   -- is there a compressor currently running?
   thread_is_running ← liftIO $ case st ⊣ compressorThreadMay of
@@ -1827,7 +1799,7 @@ fileTimeRotator_ opts pc_ d st_ _sds t = do
     𝓙 𝕙 → if and [ -- no extant thread
                    thread_is_running ≠ ThreadIsRunning
                    -- new filename is called for
-                 , 𝓙 pc ≠ cur_pc
+                 , 𝓙 pc' ≠ cur_pc
                  ]
           then do -- time to make a new handle
             hClose 𝕙
@@ -1989,7 +1961,7 @@ fileTimeRotatorTests =
 
 {-| Write to an FD with given options, using `withBatchedHandler`. Each log entry
     is vertically separated. -}
-withFDHandler ∷ ∀ α σ ρ μ . (MonadIO μ, MonadMask μ, Show σ) =>
+withFDHandler ∷ ∀ α σ ρ μ . (MonadIO μ, MonadMask μ) =>
                -- | generate a handle from maybe-state, input docstream/text
                (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (Handle,σ))
              → (SimpleDocStream ρ → 𝕋) -- ^ render the text from the docstream
@@ -2077,8 +2049,7 @@ ttyBatchingOptions = BatchingOptions { flushMaxDelay     = 2_000
 {-| Write a Log to a filehandle, with given rendering and options.
     The handle is created by a generator function, which may keep state.
 -}
--- XXX Show just for debugging
-logToHandles ∷ ∀ α σ ρ ω μ  . (MonadIO μ, MonadMask μ, Show σ) =>
+logToHandles ∷ ∀ α σ ρ ω μ  . (MonadIO μ, MonadMask μ) =>
                (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (Handle, σ))
                -- ^ handle generator
              → (SimpleDocStream ρ → 𝕋)
@@ -2117,9 +2088,8 @@ staticHandle h _ _ _ = return (h,h)
 
 {-| write a log to a filehandle, generated at need, with given options but no
     adornments -}
--- XXX Show just for debugging
-logToHandlesNoAdornments ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, Show σ) =>
-                           (𝕄 σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
+logToHandlesNoAdornments ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ) =>
+                           (𝕄 σ→SimpleDocStream AnsiStyle→𝕋→IO (Handle, σ))
                            -- ^ handle generator
                          → 𝕄 BatchingOptions
                          → LogRenderOpts ω
@@ -2250,8 +2220,7 @@ logToFile cso trx =
 ----------------------------------------
 
 {-| run `io`, logging to rotating files -}
--- XXX Show just for debugging
-logToFiles' ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, HasCompressorThreadMay σ, Show σ) =>
+logToFiles' ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, HasCompressorThreadMay σ) =>
              𝕄 BatchingOptions
            → [LogR ω]                                               -- ^ trx
            → [LogTransformer ω]                                     -- ^ ls
@@ -2271,8 +2240,7 @@ logToFiles' opts ls trx rt io = do
 ----------------------------------------
 
 {-| run `io`, logging to rotating files -}
--- XXX Show just for debugging
-logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, HasCompressorThreadMay σ, Show σ) =>
+logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, HasCompressorThreadMay σ) =>
              [LogR ω]                                               -- ^ trx
            → [LogTransformer ω]                                     -- ^ ls
            → (𝕄 σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
