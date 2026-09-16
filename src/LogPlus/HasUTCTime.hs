@@ -1,19 +1,8 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE UnicodeSyntax     #-}
-
-module Log.HasUTCTime
+module LogPlus.HasUTCTime
   ( HasUTCTime( utcTime ), HasUTCTimeY( utcTimeY ) )
 where
 
--- base --------------------------------
-
-import Data.Function  ( id )
-import Data.Maybe     ( Maybe )
-
--- lens --------------------------------
-
-import Control.Lens  ( Lens' )
+import Base1T
 
 -- time --------------------------------
 

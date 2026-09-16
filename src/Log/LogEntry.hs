@@ -8,32 +8,14 @@ module Log.LogEntry
   , _le0, _le1, _le2, _le3, _le4n, _le5n )
 where
 
+import Base1T
+
 import Prelude  ( seq )
 
 -- base --------------------------------
 
-import Data.Bool      ( Bool( False, True ) )
-import Data.Eq        ( Eq( (==) ) )
-import Data.Function  ( ($), (&) )
-import Data.Functor   ( Functor( fmap ) )
-import Data.Maybe     ( Maybe( Just, Nothing ) )
-import Data.Ord       ( (<) )
-import Data.String    ( String )
-import GHC.Generics   ( Generic )
-import GHC.Num        ( abs )
-import GHC.Stack      ( CallStack, SrcLoc( SrcLoc ), fromCallSiteList )
-import Text.Show      ( Show( show ) )
-
--- base-unicode-symbols ----------------
-
-import Data.Bool.Unicode     ( (∧) )
-import Data.Eq.Unicode       ( (≡) )
-import Data.Function.Unicode ( (∘) )
-import Data.Monoid.Unicode   ( (⊕) )
-
--- data-textual ------------------------
-
-import Data.Textual  ( Printable( print ) )
+import GHC.Generics  ( Generic )
+import GHC.Stack     ( SrcLoc( SrcLoc ), fromCallSiteList )
 
 -- deepseq -----------------------------
 
@@ -41,22 +23,16 @@ import Control.DeepSeq  ( NFData( rnf ) )
 
 -- has-callstack -----------------------
 
-import HasCallstack  ( HasCallstack( callsitelist, callstack ) )
+import HasCallstack  ( HasCallstack( callsitelist ) )
 
 -- lens --------------------------------
 
-import Control.Lens.Lens  ( Lens, Lens', lens )
+import Control.Lens.Lens  ( Lens )
 
 -- logging-effect ----------------------
 
 import Control.Monad.Log  ( Severity( Critical, Emergency, Informational
                                     , Warning ) )
-
--- more-unicode ------------------------
-
-import Data.MoreUnicode.Lens     ( (⊣), (⊢), (⊧) )
-import Data.MoreUnicode.Natural  ( ℕ )
-import Data.MoreUnicode.Text     ( 𝕋 )
 
 -- prettyprinter -----------------------
 
@@ -76,10 +52,6 @@ import Data.Text  ( Text, pack, take )
 
 import qualified  Text.Printer  as  P
 
--- tfmt --------------------------------
-
-import Text.Fmt  ( fmt )
-
 -- time --------------------------------
 
 import Data.Time.Calendar  ( fromGregorian )
@@ -90,7 +62,8 @@ import Data.Time.Clock     ( UTCTime( UTCTime ), diffUTCTime,secondsToDiffTime )
 -----------------------------------------------------------
 
 import Log.HasSeverity   ( HasSeverity( severity ) )
-import Log.HasUTCTime    ( HasUTCTimeY( utcTimeY ) )
+
+import LogPlus.HasUTCTime    ( HasUTCTimeY( utcTimeY ) )
 
 --------------------------------------------------------------------------------
 
@@ -125,9 +98,9 @@ instance Equish ω ⇒ Equish (LogEntry ω) where
        more than 10s (absolute); and no check on the callsitelist. -}
   le ≃ le' = let simpleDoc' l = layoutPretty defaultLayoutOptions (l ⊣ logdoc)
               in   (case ((le ⊣ utcTimeY), (le' ⊣ utcTimeY)) of
-                      (Nothing, Nothing) → True
+                      (Nothing, Nothing) → 𝓣
                       (Just t,  Just t') → abs (diffUTCTime t t') < 10
-                      (_, _)             → False
+                      (_, _)             → 𝓕
                    )
 
                  ∧ le ⊣ severity     ≡ le' ⊣ severity

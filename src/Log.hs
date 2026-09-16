@@ -26,6 +26,8 @@ module Log
   , tests, _log0, _log0m, _log1, _log1m )
 where
 
+import Base1T  hiding  ( toList )
+
 -- XXX factor out rotators to separate modules
 -- XXX move some functions to other modules
 
@@ -34,60 +36,35 @@ import Prelude  ( error {- XXX , undefined -} )
 
 -- async -------------------------------
 
-import Control.Concurrent.Async  ( Async, async, poll, wait )
+import Control.Concurrent.Async  ( Async, async, poll )
 
 -- base --------------------------------
 
 import qualified  Data.Foldable  as  Foldable
 
-import Control.Applicative      ( Applicative( (<*>), pure ) )
 import Control.Concurrent       ( threadDelay )
 import Control.Concurrent.MVar  ( MVar, tryReadMVar, newEmptyMVar, newMVar
                                 , readMVar, swapMVar )
-import Control.Monad            ( Monad( (>>=) )
-                                , forM, forM_, join, mapM_, return, sequence )
-import Control.Monad.IO.Class   ( MonadIO, liftIO )
 import Data.Bifunctor           ( bimap )
-import Data.Eq                  ( Eq )
-import Data.Foldable            ( Foldable, all, concatMap, foldl', foldl1
-                                , foldMap, foldr, foldr1 )
-import Data.Function            ( ($), (&), const, flip, id )
-import Data.Functor             ( Functor, fmap )
+import Data.Foldable            ( all, concatMap, foldMap )
 import Data.List                ( and, reverse, sort, sortOn, zip )
-import Data.List.NonEmpty       ( NonEmpty( (:|) ), nonEmpty )
-import Data.Maybe               ( catMaybes, isJust, maybe )
+import Data.List.NonEmpty       ( nonEmpty )
+import Data.Maybe               ( catMaybes, isJust )
 import Data.Monoid              ( Monoid )
-import Data.Ord                 ( Ord, (>) )
-import Data.Semigroup           ( Semigroup )
-import Data.String              ( IsString, String )
-import Data.Tuple               ( fst, snd, uncurry )
-import Data.Word                ( Word8, Word16, Word64 )
+import Data.String              ( IsString )
+import Data.Tuple               ( uncurry )
 import GHC.Enum                 ( Enum )
-import GHC.Exts                 ( IsList( Item, fromList, toList ) )
+import GHC.Exts                 ( IsList( toList ) )
 import GHC.Generics             ( Generic )
-import GHC.Num                  ( Num, (+), (-) )
-import GHC.Real                 ( Integral, Real, (^), div, fromIntegral )
-import GHC.Stack                ( CallStack )
-import System.Exit              ( ExitCode )
-import System.IO                ( Handle, IO, hFlush, hIsTerminalDevice, stderr )
+import GHC.Num                  ( Num )
+import GHC.Real                 ( Integral, Real, (^), div )
+import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
 import System.IO.Error          ( isDoesNotExistError )
-import Text.Show                ( Show( show ) )
 
 -- base-unicode-symbols ----------------
 
-import Data.Bool.Unicode      ( (∧) )
-import Data.Eq.Unicode        ( (≡), (≠) )
-import Data.Function.Unicode  ( (∘) )
-import Data.Monoid.Unicode    ( (⊕) )
+import Data.Eq.Unicode        ( (≠) )
 import Prelude.Unicode        ( (×) )
-
--- data-default ------------------------
-
-import Data.Default  ( Default( def ) )
-
--- data-textual ------------------------
-
-import Data.Textual  ( Printable( print ), toString, toText )
 
 -- deepseq -----------------------------
 
@@ -127,7 +104,6 @@ import FPath.RelFile           ( _RelFile_, relfile )
 -- lens --------------------------------
 
 import Control.Lens.Getter     ( view )
-import Control.Lens.Lens       ( Lens', lens )
 import Control.Lens.Review     ( re )
 import Control.Lens.Setter     ( over )
 import Control.Lens.Traversal  ( both )
@@ -144,8 +120,8 @@ import Control.Monad.Log  ( BatchingOptions( BatchingOptions
 
 -- monaderror-io -----------------------
 
-import MonadError           ( ѥ, ж )
-import MonadError.IO.Error  ( AsIOError, IOError, _IOErr )
+import MonadError           ( ж )
+import MonadError.IO.Error  ( IOError, _IOErr )
 
 -- monadio-plus ------------------------
 
@@ -172,23 +148,8 @@ import Data.MonoTraversable  ( Element
                              , MonoFunctor( omap )
                              )
 
--- more-unicode ------------------------
-
-import Data.MoreUnicode.Applicative  ( (⊵), (⋫) )
-import Data.MoreUnicode.Bool         ( 𝔹, pattern 𝓕, pattern 𝓣 )
-import Data.MoreUnicode.Either       ( 𝔼, pattern 𝓛, pattern 𝓡 )
-import Data.MoreUnicode.Functor      ( (⊳), (⊳⊳), (⩺) )
-import Data.MoreUnicode.Lens         ( (⊣), (⊢), (⊧), (⩼) )
-import Data.MoreUnicode.Maybe        ( 𝕄, pattern 𝓙, pattern 𝓝, (⧏) )
-import Data.MoreUnicode.Monad        ( (⪼), (≫) )
-import Data.MoreUnicode.Natural      ( ℕ )
-import Data.MoreUnicode.Semigroup    ( (◇) )
-import Data.MoreUnicode.String       ( 𝕊 )
-import Data.MoreUnicode.Text         ( 𝕋 )
-
 -- mtl ---------------------------------
 
-import Control.Monad.Except    ( ExceptT, MonadError )
 import Control.Monad.Identity  ( runIdentity )
 
 -- natural -----------------------------
@@ -232,15 +193,16 @@ import Single( MonoSingle( osingle ), single )
 
 -- tasty -------------------------------
 
-import Test.Tasty        ( DependencyType( AllSucceed ), TestName, TestTree
-                         , dependentTestGroup, testGroup )
-import Test.Tasty.HUnit  ( Assertion
-                         , assertBool, assertEqual, assertFailure,  testCase )
+import Test.Tasty        ( DependencyType( AllSucceed ), dependentTestGroup )
+
+-- tasty-hunit -------------------------
+
+import Test.Tasty.HUnit  ( Assertion, assertBool, assertEqual, assertFailure )
 
 -- tasty-plus --------------------------
 
-import TastyPlus         ( assertIsJust, assertLeft, assertListEq, assertListEqIO
-                         , assertSuccess, runTestsP, runTestsReplay, runTestTree)
+import TastyPlus         ( assertIsJust, assertLeft, assertListEq
+                         , assertListEqIO)
 import TastyPlus.Equish  ( Equish( (≃) ) )
 
 -- terminal-size -----------------------
@@ -253,10 +215,6 @@ import Data.Text      qualified as  T
 import Data.Text.Lazy qualified
 
 import Data.Text.IO  ( hPutStr, hPutStrLn )
-
--- text-format -------------------------
-
-import Text.Fmt  ( fmt )
 
 -- text-printer ------------------------
 
@@ -277,8 +235,6 @@ import System.Posix.Types  ( FileMode )
 --                     local imports                       -
 ------------------------------------------------------------
 
-import Log.CompressorThread  ( CompressorThread )
-import Log.HasAsync          ( HasAsync( async_, waitAsync ) )
 import Log.LogEntry          ( LogEntry, LogEntry
                              , logEntry, logdoc, _le0, _le1, _le2, _le3 )
 import Log.LogRenderOpts     ( LogR, LogRenderOpts
@@ -287,8 +243,11 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , renderWithCallStack, renderWithSeverity
                              , renderWithStackHead, renderWithTimestamp
                              )
+
+import LogPlus.CompressorThread  ( CompressorThread )
+import LogPlus.HasAsync          ( HasAsync( async_, waitAsync ) )
 -- XXX move this to its own module
-import Log.New               ( new )
+import LogPlus.New               ( new )
 
 import LogPlus.Paths  qualified as  Paths
 

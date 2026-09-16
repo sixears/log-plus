@@ -9,49 +9,24 @@ module T.Log
   ( tests )
 where
 
+import Base1T
+
 -- base --------------------------------
 
-import Control.Monad           ( Monad )
 import Control.Monad.Identity  ( runIdentity )
-import Data.Functor            ( fmap )
-import Data.Functor.Identity   ( Identity )
-import Data.Maybe              ( Maybe( Just, Nothing ) )
 import Data.Monoid             ( mconcat )
-import Data.String             ( String )
-import System.Exit             ( ExitCode )
-import System.IO               ( IO )
-
--- base-unicode-symbols ----------------
-
-import Data.Function.Unicode  ( (∘) )
-import Data.Monoid.Unicode    ( (⊕) )
-
--- data-textual ------------------------
-
-import Data.Textual  ( toText )
 
 -- logging-effect ----------------------
 
 import Control.Monad.Log  ( MonadLog, PureLoggingT, Severity( Informational ) )
 
--- more-unicode ------------------------
-
-import Data.MoreUnicode.Functor   ( (⊳) )
-import Data.MoreUnicode.Maybe     ( 𝕄 )
-import Data.MoreUnicode.Natural   ( ℕ )
-import Data.MoreUnicode.Text      ( 𝕋 )
-
 -- prettyprinter -----------------------
 
 import Prettyprinter  ( PageWidth( Unbounded ) )
 
--- tasty -------------------------------
-
-import Test.Tasty  ( TestTree, testGroup )
-
 -- tasty-plus --------------------------
 
-import TastyPlus   ( assertListCmp, runTestsP, runTestsReplay, runTestTree )
+import TastyPlus   ( assertListCmp )
 
 -- text --------------------------------
 

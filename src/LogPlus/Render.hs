@@ -1,26 +1,18 @@
-module Log.Render
+module LogPlus.Render
   ( renderWithCallStack, renderWithSeverity, renderWithSeverityAndTimestamp
   , renderWithSeverityAnsi, renderWithStackHead, renderWithTimestamp )
 where
 
+import Base1T
+
 -- base --------------------------------
 
-import Data.Function  ( ($) )
-import Data.Functor   ( fmap )
-import Data.Maybe     ( Maybe( Just, Nothing ) )
-import Data.String    ( String )
-import Data.Tuple     ( snd )
-import GHC.Stack      ( SrcLoc
-                      , getCallStack, prettySrcLoc, srcLocFile,srcLocStartLine )
-
--- base-unicode-symbols ----------------
-
-import Data.Function.Unicode  ( (∘) )
-import Data.Monoid.Unicode    ( (⊕) )
+import GHC.Stack  ( SrcLoc
+                  , getCallStack, prettySrcLoc, srcLocFile,srcLocStartLine )
 
 -- has-callstack -----------------------
 
-import HasCallstack  ( HasCallstack( callstack, stackhead ) )
+import HasCallstack  ( HasCallstack( stackhead ) )
 
 -- logging-effect ----------------------
 
@@ -29,11 +21,7 @@ import Control.Monad.Log  ( Severity( Alert, Critical, Debug, Emergency, Error
 
 -- more-unicode ------------------------
 
-import Data.MoreUnicode.Doc      ( (⊞) )
-import Data.MoreUnicode.Functor  ( (⊳) )
-import Data.MoreUnicode.Lens     ( (⊣) )
-import Data.MoreUnicode.Maybe    ( pattern 𝓝 )
-import Data.MoreUnicode.Monoid   ( ю )
+import Data.MoreUnicode.Doc  ( (⊞) )
 
 -- prettyprinter -----------------------
 
@@ -53,14 +41,15 @@ import Data.Text  ( Text )
 
 -- tfmt --------------------------------
 
-import Text.Fmt  ( formatUTCYDoW, fmt )
+import Text.Fmt  ( formatUTCYDoW )
 
 ------------------------------------------------------------
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log.HasSeverity   ( HasSeverity( severity ) )
-import Log.HasUTCTime    ( HasUTCTimeY( utcTimeY ), )
+import Log.HasSeverity  ( HasSeverity( severity ) )
+
+import LogPlus.HasUTCTime  ( HasUTCTimeY( utcTimeY ), )
 
 --------------------------------------------------------------------------------
 

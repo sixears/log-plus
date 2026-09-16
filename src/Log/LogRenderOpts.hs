@@ -24,52 +24,27 @@ module Log.LogRenderOpts
   )
 where
 
+import Base1T
+
 -- base --------------------------------
 
-import Data.Foldable       ( Foldable( foldr ) )
-import Data.Function       ( ($), flip, id )
-import Data.Functor        ( fmap )
-import Data.Maybe          ( Maybe( Nothing ) )
-import Data.String         ( String )
 import Data.Type.Equality  ( type(~) )
 import GHC.Stack           ( SrcLoc )
-import System.Exit         ( ExitCode )
-import System.IO           ( Handle, IO, stdout )
-import Text.Show           ( show )
-
--- base-unicode-symbols ----------------
-
-import Data.Function.Unicode  ( (∘) )
-import Data.Monoid.Unicode    ( (⊕) )
-
--- data-default ------------------------
-
-import Data.Default  ( Default( def ) )
+import System.IO           ( Handle, stdout )
 
 -- lens --------------------------------
 
-import Control.Lens  ( Lens', lens, view )
+import Control.Lens  ( view )
 
 -- logging-effect ----------------------
 
 import Control.Monad.Log  ( Severity( Alert, Debug, Critical, Emergency, Error
                                     , Informational, Notice, Warning ) )
 
--- monadio-plus ------------------------
-
-import MonadIO  ( MonadIO, liftIO )
-
 -- mono-traversable --------------------
 
 import Data.MonoTraversable  ( Element, MonoFoldable( otoList )
                              , MonoFunctor( omap ) )
-
--- more-unicode ------------------------
-
-import Data.MoreUnicode.Functor  ( (⊳) )
-import Data.MoreUnicode.Lens     ( (⊣) )
-import Data.MoreUnicode.Monoid   ( ф )
-import Data.MoreUnicode.Natural  ( ℕ )
 
 -- prettyprinter -----------------------
 
@@ -86,17 +61,9 @@ import Prettyprinter.Render.Text  ( renderStrict )
 import qualified  Prettyprinter.Render.Terminal  as  Terminal
 import Prettyprinter.Render.Terminal  ( AnsiStyle )
 
--- tasty -------------------------------
-
-import Test.Tasty  ( TestTree, testGroup )
-
--- tasty-hunit -------------------------
-
-import Test.Tasty.HUnit  ( testCase )
-
 -- tasty-plus --------------------------
 
-import TastyPlus  ( (≟), assertListEq, runTestsP, runTestsReplay, runTestTree )
+import TastyPlus  ( (≟), assertListEq )
 
 -- text --------------------------------
 
@@ -110,12 +77,13 @@ import Data.Text  ( Text )
 
 import qualified  Log.LogEntry  as  LogEntry
 
-import Log.LogEntry      ( LogEntry , logEntry, _le0 )
-import Log.Render        ( renderWithCallStack, renderWithSeverity
-                         , renderWithSeverityAndTimestamp
-                         , renderWithSeverityAnsi, renderWithStackHead
-                         , renderWithTimestamp
-                         )
+import Log.LogEntry  ( LogEntry , logEntry, _le0 )
+
+import LogPlus.Render  ( renderWithCallStack, renderWithSeverity
+                       , renderWithSeverityAndTimestamp
+                       , renderWithSeverityAnsi, renderWithStackHead
+                       , renderWithTimestamp
+                       )
 
 --------------------------------------------------------------------------------
 
