@@ -28,16 +28,22 @@ import LogPlus.New  ( New( new ) )
 newtype FilenameExtension =
   FilenameExtension { unFilenameExtension ∷ PathComponent }
 
+----------
+
 instance New FilenameExtension PathComponent  where  new = FilenameExtension
 
 ------------------------------------------------------------
 
+{-| things that have `FilenameExtension`s -}
 class HasFilenameExtension α where
+  {-| access to `FilenameExtension` of an α -}
   filenameExtension   ∷ Lens' α FilenameExtension
+  {-| direct access to `PathComponent` of `FilenameExtension` of an `α` -}
   filenameExtensionPC ∷ Lens' α PathComponent
   filenameExtensionPC =
     lens (unFilenameExtension ∘ view filenameExtension)
          (\ a p → a & filenameExtension ⊢ FilenameExtension p)
+
   {-| append this extension to an existing PathComponent -}
   appendExtension     ∷ FileLike γ => α → γ → γ
   appendExtension a f = f ⊙ (a ⊣ filenameExtensionPC)
