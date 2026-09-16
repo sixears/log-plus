@@ -277,42 +277,22 @@ import System.Posix.Types  ( FileMode )
 --                     local imports                       -
 ------------------------------------------------------------
 
-import Log.LogEntry       ( LogEntry, LogEntry
-                          , logEntry, logdoc, _le0, _le1, _le2, _le3 )
-import Log.LogRenderOpts  ( LogR, LogRenderOpts
-                          , logRenderOpts', lroOpts, lroRenderer
-                          , lroRenderSevCS, lroRenderTSSevCSH, lroWidth
-                          , renderWithCallStack, renderWithSeverity
-                          , renderWithStackHead, renderWithTimestamp
-                          )
+import Log.CompressorThread  ( CompressorThread )
+import Log.HasAsync          ( HasAsync( async_, waitAsync ) )
+import Log.LogEntry          ( LogEntry, LogEntry
+                             , logEntry, logdoc, _le0, _le1, _le2, _le3 )
+import Log.LogRenderOpts     ( LogR, LogRenderOpts
+                             , logRenderOpts', lroOpts, lroRenderer
+                             , lroRenderSevCS, lroRenderTSSevCSH, lroWidth
+                             , renderWithCallStack, renderWithSeverity
+                             , renderWithStackHead, renderWithTimestamp
+                             )
+-- XXX move this to its own module
+import Log.New               ( new )
 
 import LogPlus.Paths  qualified as  Paths
 
 --------------------------------------------------------------------------------
-
-class HasAsync α β where
-  async_      ∷ Lens' α (Async β)
-  waitAsync   ∷ MonadIO μ => α → μ β
-  waitAsync a = liftIO $ wait (a ⊣ async_)
-
-----------
-
-instance HasAsync (Async β) β where async_ = lens id (const id)
-
-------------------------------------------------------------
-
-newtype CompressorThread = CompressorThread { unCompressorThread ∷ Async () }
-
-----------
-
-instance HasAsync CompressorThread () where
-  async_ = lens unCompressorThread (const CompressorThread)
-
-----------
-
-instance Show CompressorThread where show _ = "CompressorThread"
-
-------------------------------------------------------------
 
 newtype Name = Name { unName ∷ 𝕊 }  deriving  (IsString,Show)
 
@@ -1034,7 +1014,7 @@ asyncCompressorThread c file_perms to = liftIO $
       c' = \ from_ to_ → do (c ⊣ compressorIOF) from_ to_
                             ж $ chmod @IOError file_perms to_
       ext = c ⊣ filenameExtensionPC
-  in  CompressorThread ⊳ async (c' to (to⊙ext))
+  in  new ⊳ async (c' to (to⊙ext))
 
 
 ----------------------------------------
@@ -1138,8 +1118,8 @@ class HasCompressorThreadMay α where
   compressorThreadMay ∷ Lens' α (𝕄 CompressorThread)
   compressorThreadAsyncMay ∷ Lens' α (𝕄 (Async ()))
   compressorThreadAsyncMay =
-    lens (fmap unCompressorThread ∘ view compressorThreadMay)
-         (\ a x → a & compressorThreadMay ⊢ (CompressorThread ⊳ x))
+    lens (view async_ ⩺ view compressorThreadMay)
+         (\ a x → a & compressorThreadMay ⊢ (new ⊳ x))
 
 ----------
 
