@@ -95,7 +95,7 @@ import FPath.AbsDir            ( AbsDir )
 import FPath.AbsFile           ( AbsFile, absfile )
 import FPath.Basename          ( basename )
 import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
-import FPath.FileLike          ( FileLike, (⊙) )
+import FPath.FileLike          ( (⊙) )
 import FPath.Parseable         ( __parseS__ )
 import FPath.PathComponent     ( PathComponent, pc )
 import FPath.RelFile           ( _RelFile_, relfile )
@@ -243,36 +243,22 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , renderWithStackHead, renderWithTimestamp
                              )
 
-import LogPlus.CompressorIO      ( CompressorIO
-                                 , HasCompressorIO(compressorIO,compressorIOF))
-import LogPlus.CompressorThread  ( CompressorThread )
-import LogPlus.HasAsync          ( HasAsync( async_, waitAsync ) )
-import LogPlus.Name              ( HasName( name, nameS ), Name )
+import LogPlus.CompressorIO       ( CompressorIO
+                                  , HasCompressorIO(compressorIO,compressorIOF))
+import LogPlus.CompressorThread   ( CompressorThread )
+import LogPlus.FilenameExtension  ( FilenameExtension
+                                  , HasFilenameExtension( appendExtension
+                                                        , filenameExtension
+                                                        , filenameExtensionPC )
+                                  )
+import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
+import LogPlus.Name               ( HasName( name, nameS ), Name )
 -- XXX move this to its own module
-import LogPlus.New               ( new )
+import LogPlus.New                ( new )
 
 import LogPlus.Paths  qualified as  Paths
 
 --------------------------------------------------------------------------------
-
-{-| filename extension, e.g., to be appended after a `.` character -}
-newtype FilenameExtension =
-  FilenameExtension { unFilenameExtension ∷ PathComponent }
-
-------------------------------------------------------------
-
-class HasFilenameExtension α where
-  filenameExtension   ∷ Lens' α FilenameExtension
-  filenameExtensionPC ∷ Lens' α PathComponent
-  filenameExtensionPC =
-    lens (unFilenameExtension ∘ view filenameExtension)
-         (\ a p → a & filenameExtension ⊢ FilenameExtension p)
-  {-| append this extension to an existing PathComponent -}
-  appendExtension     ∷ FileLike γ => α → γ → γ
-  appendExtension a f = f ⊙ (a ⊣ filenameExtensionPC)
-
-instance HasFilenameExtension FilenameExtension where
-  filenameExtension = lens id (const id)
 
 ------------------------------------------------------------
 
@@ -2169,9 +2155,7 @@ logToFiles = logToFiles' (𝓙 fileBatchingOptions)
 ----------------------------------------
 
 compressPzstd ∷ Compressor
-compressPzstd =
-  Compressor "pstzd" (new pzstdIO) (FilenameExtension [pc|zst|])
-
+compressPzstd = Compressor "pstzd" (new pzstdIO) (new [pc|zst|])
 
 ----------------------------------------
 
