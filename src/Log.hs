@@ -51,7 +51,6 @@ import Data.List                ( and, reverse, sort, sortOn, zip )
 import Data.List.NonEmpty       ( nonEmpty )
 import Data.Maybe               ( catMaybes, isJust )
 import Data.Monoid              ( Monoid )
-import Data.String              ( IsString )
 import Data.Tuple               ( uncurry )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( toList ) )
@@ -246,21 +245,13 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
 
 import LogPlus.CompressorThread  ( CompressorThread )
 import LogPlus.HasAsync          ( HasAsync( async_, waitAsync ) )
+import LogPlus.Name              ( HasName( name, nameS ), Name )
 -- XXX move this to its own module
 import LogPlus.New               ( new )
 
 import LogPlus.Paths  qualified as  Paths
 
 --------------------------------------------------------------------------------
-
-newtype Name = Name { unName ∷ 𝕊 }  deriving  (IsString,Show)
-
-------------------------------------------------------------
-
-class HasName α where
-  name  ∷ Lens' α Name
-  nameS ∷ Lens' α 𝕊
-  nameS = lens (unName ∘ view name) (\ a s → a & name ⊢ Name s)
 
 ------------------------------------------------------------
 
