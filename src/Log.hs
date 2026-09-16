@@ -243,6 +243,8 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , renderWithStackHead, renderWithTimestamp
                              )
 
+import LogPlus.CompressorIO      ( CompressorIO
+                                 , HasCompressorIO(compressorIO,compressorIOF))
 import LogPlus.CompressorThread  ( CompressorThread )
 import LogPlus.HasAsync          ( HasAsync( async_, waitAsync ) )
 import LogPlus.Name              ( HasName( name, nameS ), Name )
@@ -252,21 +254,6 @@ import LogPlus.New               ( new )
 import LogPlus.Paths  qualified as  Paths
 
 --------------------------------------------------------------------------------
-
-------------------------------------------------------------
-
-{-| takes from,to filenames and does the deed -}
-newtype CompressorIO = CompressorIO { unCompressorIO ∷ AbsFile→AbsFile→IO () }
-
-------------------------------------------------------------
-
-class HasCompressorIO α where
-  compressorIO ∷ Lens' α CompressorIO
-  compressorIOF ∷ Lens' α (AbsFile → AbsFile → IO())
-  compressorIOF = lens (unCompressorIO ∘ view compressorIO)
-                       (\ a f → a & compressorIO ⊢ CompressorIO f)
-
-------------------------------------------------------------
 
 {-| filename extension, e.g., to be appended after a `.` character -}
 newtype FilenameExtension =
@@ -2183,7 +2170,7 @@ logToFiles = logToFiles' (𝓙 fileBatchingOptions)
 
 compressPzstd ∷ Compressor
 compressPzstd =
-  Compressor "pstzd" (CompressorIO pzstdIO) (FilenameExtension [pc|zst|])
+  Compressor "pstzd" (new pzstdIO) (FilenameExtension [pc|zst|])
 
 
 ----------------------------------------
