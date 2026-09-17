@@ -255,6 +255,7 @@ import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
 import LogPlus.Name               ( Name )
 -- XXX move this to its own module
 import LogPlus.New                ( new )
+import LogPlus.StdErr             ( eToStderr, eToStderrIO, stdErrT )
 
 import LogPlus.Paths  qualified as  Paths
 
@@ -302,21 +303,6 @@ eMonad = EMonad ∘ ѥ
 
 --------------------
 
-{-| write some text to stderr (in case something fails within the logging) -}
-stdErr ∷ MonadIO μ => 𝕋 → μ ()
-stdErr t = liftIO (hPutStrLn stderr t)
-
---------------------
-
-{-| given an Either, dump a `Left` to stderr; return `Right` as a `Just` -}
-eToStderr ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => 𝔼 ε α → μ (𝕄 α)
-eToStderr (𝓛 e) = do { stdErr (toText e); return 𝓝 }
-eToStderr (𝓡 r) = return (𝓙 r)
-
-{-| `eToStderr`, but reified to `IO()` -}
-eToStderrIO ∷ Printable ε => 𝔼 ε α → IO ()
-eToStderrIO = (const ()) ⩺ eToStderr
-
 {-| run a sequence of potentially errorful computations; writing any failures to
     stderr, maybe returning a result -}
 runEMonad ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => EMonad ε μ α → μ (𝕄 α)
@@ -356,13 +342,13 @@ eMonadTests =
       testDoesNotExist tn io = testCase tn $ runE io ≫ assertDoesNotExist
 
   in  testGroup "EMonad" $
-                [ testIsJust       "open ok"        $ openr passwd
-                , testDoesNotExist "open not ok"    $ openr nonsuch
-                , testDoesNotExist "open not ok→ok" $ openr nonsuch⪼openr passwd
-                , testDoesNotExist "open not ok × 2"$openr nonsuch⪼openr nonsuch
-                , testDoesNotExist "open ok→not ok" $ openr passwd⪼openr nonsuch
-                , testIsJust       "open ok→ok"     $ openr passwd ⪼ openr group
-                ]
+        [ testIsJust       "open ok"         $ openr passwd
+        , testDoesNotExist "open not ok"     $ openr nonsuch
+        , testDoesNotExist "open not ok→ok"  $ openr nonsuch ⪼ openr passwd
+        , testDoesNotExist "open not ok × 2" $ openr nonsuch ⪼ openr nonsuch
+        , testDoesNotExist "open ok→not ok"  $ openr passwd  ⪼ openr nonsuch
+        , testIsJust       "open ok→ok"      $ openr passwd  ⪼ openr group
+        ]
 
 ------------------------------------------------------------
 
@@ -988,9 +974,9 @@ fileCompressClean opts = do
       max_files   = opts ⊣ maxFiles
   (fes,des,errs) ← glob (opts ⊣ globPCRERegex) (opts ⊣ absDir_)
   forM_ des $ \ (d,_st) → liftIO $ do
-    hPutStrLn stderr $ [fmt|ignoring globbed directory: %T|] d
+    stdErrT $ [fmt|Log compress/clean: ignoring globbed directory: %T|] d
   forM_ errs $ \ (f∷AbsFile,e∷FPathIOError) → liftIO $ do
-    hPutStrLn stderr $ [fmt|failed to read '%T': %T|] f e
+    stdErrT $ [fmt|Log compress/clean: failed to read '%T': %T|] f e
   let fns    ∷ [AbsFile] = sort (fst ⊳ fes) -- the oldest is listed first
       rms    ∷ [AbsFile] = -- ⊟ 1 to account for the file we're about to write
         dropEnd (fromIntegral $ (unMaxFiles max_files)⊟1) fns
@@ -1640,12 +1626,11 @@ fileTimeRotator_ opts pc_ d st_ _sds _t = do
         (cmprs,rms) ← ѥ (fileCompressClean opts) ≫ \ case
           𝓡 (cmprs,rms) → return (cmprs,rms)
           𝓛 (e ∷ FPathIOError) → do
-            stdErr $ [fmt|error compressing/cleaning old logs: %T|] e
+            stdErrT $ [fmt|error compressing/cleaning old logs: %T|] e
             return (𝓝,[])
-        forM_ rms $ \ f →
-                  ѥ (unlink f) ≫ \ case
-                    𝓡 ()            → return ()
-                    𝓛 (e ∷ IOError) → stdErr $ [fmt|error unlinking %T: %T|] f e
+        forM_ rms $ \ f → ѥ @IOError (unlink f) ≫ \ case
+                            𝓡 () → return ()
+                            𝓛 e  → stdErrT $ [fmt|error unlinking %T: %T|] f e
 
         compressor_thread ← case cmprs of
           𝓝         → return 𝓝
