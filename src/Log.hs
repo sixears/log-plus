@@ -58,7 +58,6 @@ import GHC.Generics             ( Generic )
 import GHC.Num                  ( Num )
 import GHC.Real                 ( Integral, Real, (^), div )
 import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
-import System.IO.Error          ( isDoesNotExistError )
 
 -- base-unicode-symbols ----------------
 
@@ -92,7 +91,7 @@ import qualified  FPath.File
 
 import FPath                   ( (⫻), stripDirFPE )
 import FPath.AbsDir            ( AbsDir )
-import FPath.AbsFile           ( AbsFile, absfile )
+import FPath.AbsFile           ( AbsFile )
 import FPath.Basename          ( basename )
 import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
 import FPath.FileLike          ( (⊙) )
@@ -120,7 +119,7 @@ import Control.Monad.Log  ( BatchingOptions( BatchingOptions
 -- monaderror-io -----------------------
 
 import MonadError           ( ж )
-import MonadError.IO.Error  ( IOError, _IOErr )
+import MonadError.IO.Error  ( IOError )
 
 -- monadio-plus ------------------------
 
@@ -132,7 +131,7 @@ import MonadIO.File                   ( chmod, devnull, rename, unlink )
 import MonadIO.FStat                  ( FExists( FExists ), lfexists )
 import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
                                         handle, hClose, hname )
-import MonadIO.OpenFile               ( FileOpenMode( FileR, FileW ), openFile )
+import MonadIO.OpenFile               ( FileOpenMode( FileW ), openFile )
 import MonadIO.Process                ( doProc )
 import MonadIO.Process.CmdSpec        ( mkCmd )
 import MonadIO.Temp                   ( __progNamePrefix__, __tempdir__
@@ -192,16 +191,15 @@ import Single( MonoSingle( osingle ), single )
 
 -- tasty -------------------------------
 
-import Test.Tasty        ( DependencyType( AllSucceed ), dependentTestGroup )
+import Test.Tasty  ( DependencyType( AllSucceed ), dependentTestGroup )
 
 -- tasty-hunit -------------------------
 
-import Test.Tasty.HUnit  ( Assertion, assertBool, assertEqual, assertFailure )
+import Test.Tasty.HUnit  ( assertEqual, assertFailure )
 
 -- tasty-plus --------------------------
 
-import TastyPlus         ( assertIsJust, assertLeft, assertListEq
-                         , assertListEqIO)
+import TastyPlus         ( assertListEq, assertListEqIO)
 import TastyPlus.Equish  ( Equish( (≃) ) )
 
 -- terminal-size -----------------------
@@ -247,6 +245,7 @@ import LogPlus.Compressor         ( Compressor )
 import LogPlus.CompressorIO       ( CompressorIO
                                   , HasCompressorIO( compressorIOF ) )
 import LogPlus.CompressorThread   ( CompressorThread )
+import LogPlus.EMonad             ( ꙝ, ꙝ' )
 import LogPlus.FilenameExtension  ( FilenameExtension
                                   , HasFilenameExtension( appendExtension
                                                         , filenameExtensionPC )
@@ -255,100 +254,11 @@ import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
 import LogPlus.Name               ( Name )
 -- XXX move this to its own module
 import LogPlus.New                ( new )
-import LogPlus.StdErr             ( eToStderr, eToStderrIO, stdErrT )
+import LogPlus.StdErr             ( eToStderrIO, stdErrT )
 
 import LogPlus.Paths  qualified as  Paths
 
 --------------------------------------------------------------------------------
-
--- XXX move & document this
-
--- odd ordering of variables make definition of Functor, Applicative, Monad
--- instances easier (or maybe possible)
-{-| an either/error monad, designed to exit with the first error -}
-data EMonad ε μ α = MonadIO μ => EMonad { runEMonadE ∷ μ (𝔼 ε α) }
-
---------------------
-
-instance Functor (EMonad ε μ) where
-  fmap f (EMonad m) = EMonad $ fmap (fmap f) m
-
---------------------
-
-instance MonadIO μ => Applicative (EMonad ε μ) where
-  pure x = EMonad $ return (𝓡 x)
-  (EMonad f) <*> (EMonad x) = EMonad $ do
-    f' ← f
-    x' ← x
-    return $ f' <*> x'
-
---------------------
-
-instance MonadIO μ => Monad (EMonad ε μ) where
-  (EMonad io) >>= f = EMonad $ do
-    result ← io
-    case result of
-      𝓛 e → return (𝓛 e)      -- halt further computation
-      𝓡 b → runEMonadE (f b)
-
---------------------
-
-{-| construct an `EMonad` from an `ExceptT`; e.g., a `monadError` -}
-eMonad ∷ ∀ ε α μ . MonadIO μ => ExceptT ε μ α → EMonad ε μ α
-eMonad = EMonad ∘ ѥ
-
-{-| unicode alias for `eMonad` (`EMonad` construction) -}
-ꙗ ∷ ∀ ε α μ . MonadIO μ => ExceptT ε μ α → EMonad ε μ α
-ꙗ = eMonad
-
---------------------
-
-{-| run a sequence of potentially errorful computations; writing any failures to
-    stderr, maybe returning a result -}
-runEMonad ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => EMonad ε μ α → μ (𝕄 α)
-runEMonad m = runEMonadE m ≫ eToStderr
-
-{-| shortcut for making and running an `EMonad`, with a unicode alias -}
-ꙝ ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => ExceptT ε μ α → μ (𝕄 α)
-ꙝ = runEMonad ∘ eMonad
-
-{-| like `ꙝ`, discarding the result -}
-ꙝ' ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => ExceptT ε μ α → μ ()
-ꙝ' = const () ⩺ ꙝ
-
-----------------------------------------
-
-eMonadTests ∷ TestTree
-eMonadTests =
-  let openr x = do
-        openFile @IOError NoEncoding FileR x ≫ \ h → hClose h ⪼ return h
-      passwd  = [absfile|/etc/passwd|]
-      group   = [absfile|/etc/group|]
-      nonsuch = [absfile|/etc/nonesuch|]
-      run     ∷ (MonadIO μ, Show α, Printable ε) => ExceptT ε μ α → μ (𝕄 α)
-      run     = runEMonad ∘ EMonad ∘ ѥ
-      runE    ∷ (MonadIO μ, Show α, Printable ε) => ExceptT ε μ α → μ (𝔼 ε α)
-      runE    = runEMonadE ∘ EMonad ∘ ѥ
-      assertDoesNotExist ∷ (Show α, AsIOError ε) => 𝔼 ε α → Assertion
-      assertDoesNotExist = assertLeft (  assertBool "isDoesNotExistError"
-                                       ∘ (≡ 𝓙 𝓣)
-                                       ∘ (isDoesNotExistError ⩺ (⩼ _IOErr)))
-      testIsJust ∷ (Show α, Printable ε) =>
-                   TestName → ExceptT ε IO α → TestTree
-      testIsJust tn io = testCase tn $ run io ≫ assertIsJust
-
-      testDoesNotExist ∷ (Show α, AsIOError ε, Printable ε) =>
-                         TestName → ExceptT ε IO α → TestTree
-      testDoesNotExist tn io = testCase tn $ runE io ≫ assertDoesNotExist
-
-  in  testGroup "EMonad" $
-        [ testIsJust       "open ok"         $ openr passwd
-        , testDoesNotExist "open not ok"     $ openr nonsuch
-        , testDoesNotExist "open not ok→ok"  $ openr nonsuch ⪼ openr passwd
-        , testDoesNotExist "open not ok × 2" $ openr nonsuch ⪼ openr nonsuch
-        , testDoesNotExist "open ok→not ok"  $ openr passwd  ⪼ openr nonsuch
-        , testIsJust       "open ok→ok"      $ openr passwd  ⪼ openr group
-        ]
 
 ------------------------------------------------------------
 
@@ -2194,12 +2104,11 @@ _log1io = do logIO @𝕋 Warning 1 "start"
              liftIO $ threadDelay 1_000_000
              logIO @𝕋 Critical 2 "end"
 
--- tests -------------------------------
+-- tests -----------------------------------------------------------------------
 
 tests ∷ TestTree
 tests = dependentTestGroup "Log" AllSucceed
-          [ logRender'Tests, eMonadTests
-          , fileSizeRotatorTests, fileTimeRotatorTests ]
+          [ logRender'Tests, fileSizeRotatorTests, fileTimeRotatorTests ]
 
 ----------------------------------------
 

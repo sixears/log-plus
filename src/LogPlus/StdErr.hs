@@ -1,3 +1,5 @@
+{- XXX move this somewhere -}
+
 module LogPlus.StdErr
   ( stdErr, stdErrT, eToStderr, eToStderrIO )
 where

@@ -1,3 +1,5 @@
+{- XXX move this, or something like it, to fpath -}
+
 module LogPlus.FilenameExtension
   ( FilenameExtension
   , HasFilenameExtension( appendExtension, filenameExtension

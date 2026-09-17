@@ -39,6 +39,8 @@ import Data.Text  ( isPrefixOf, lines, replicate )
 import qualified  Log
 import qualified  Log.LogRenderOpts
 
+import qualified  LogPlus.EMonad
+
 import Log                ( Log, WithLog, log, logRender' )
 import Log.LogRenderOpts  ( logRenderOpts', renderWithSeverity
                           , renderWithCallStack )
@@ -123,7 +125,8 @@ logRenderTests =
 ----------------------------------------
 
 tests ∷ TestTree
-tests = testGroup "Log" [ Log.tests, Log.LogRenderOpts.tests, logRenderTests ]
+tests = testGroup "Log" [ LogPlus.EMonad.tests, Log.tests
+                        , Log.LogRenderOpts.tests, logRenderTests ]
 
 ----------------------------------------
 

@@ -1,3 +1,5 @@
+{- XXX move this somewhere -}
+
 module LogPlus.New
   ( New( new ) )
 where
