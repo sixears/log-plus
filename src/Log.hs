@@ -252,6 +252,7 @@ import LogPlus.FilenameExtension  ( FilenameExtension
                                   )
 import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
 import LogPlus.Name               ( Name )
+import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ), MaxFileSize )
 -- XXX move this to its own module
 import LogPlus.New                ( new )
 import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
@@ -999,14 +1000,6 @@ instance HasMaxFiles MaxFiles where maxFiles = lens id (const id)
 
 ------------------------------------------------------------
 
-newtype MaxFileSize = MaxFileSize { unMaxFileSize ∷ SizeBytes }
-  deriving  (Num,Show)
-
-----------
-
-instance HasSizeBytes MaxFileSize where
-  sizeBytes = lens unMaxFileSize (\ _ z → MaxFileSize z)
-
 ------------------------------------------------------------
 
 class HasCompressorMay α where compressorMay ∷ Lens' α (𝕄 Compressor)
@@ -1057,10 +1050,6 @@ instance FilenameGenerator (TimeFilenameGenerator τ) (TimeFnGen τ) where
 ------------------------------------------------------------
 
 class HasPerms α where perms ∷ Lens' α FileMode
-
-------------------------------------------------------------
-
-class HasMaxFileSize α where maxFileSize ∷ Lens' α MaxFileSize
 
 ------------------------------------------------------------
 

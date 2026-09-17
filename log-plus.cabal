@@ -24,6 +24,7 @@ library
                     , LogPlus.FilenameExtension
                     , LogPlus.HasAsync
                     , LogPlus.HasUTCTime
+                    , LogPlus.MaxFileSize
                     , LogPlus.Name
                     , LogPlus.Paths
                     , LogPlus.Render
