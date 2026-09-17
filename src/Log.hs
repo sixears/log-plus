@@ -56,7 +56,7 @@ import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( toList ) )
 import GHC.Generics             ( Generic )
 import GHC.Num                  ( Num )
-import GHC.Real                 ( Integral, Real, (^), div )
+import GHC.Real                 ( Integral, (^), div )
 import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
 
 -- base-unicode-symbols ----------------
@@ -254,6 +254,7 @@ import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
 import LogPlus.Name               ( Name )
 -- XXX move this to its own module
 import LogPlus.New                ( new )
+import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
 import LogPlus.StdErr             ( eToStderrIO, stdErrT )
 
 import LogPlus.Paths  qualified as  Paths
@@ -748,15 +749,6 @@ flusher hgen stvar renderT logit pw messages = do
   (h,st') ← hgen st t
   _ ← liftIO $ swapMVar stvar st'
   logit h t
-
-----------------------------------------
-
-newtype SizeBytes = SizeBytes Word64
-  deriving (Enum,Eq,Integral,Num,Ord,Real,Show)
-
---------------------
-
-class HasSizeBytes α where sizeBytes ∷ Lens' α SizeBytes
 
 ------------------------------------------------------------
 
@@ -1309,7 +1301,7 @@ fileSizeRotator ∷ ∀ ω μ . MonadIO μ =>
 
 fileSizeRotator opts fn st_ _sds t = do
   let st          = st_ ⧏ def
-      l           = SizeBytes (ɨ $ щ t) -- length of t
+      l           = new @SizeBytes @Word64 (ɨ $ щ t) -- length of t
       bytes_would = (st ⊣ sizeBytes) + l
       -- create a new handle, return a thread reference for the compressor if
       -- used to compress the old one

@@ -27,6 +27,7 @@ library
                     , LogPlus.Name
                     , LogPlus.Paths
                     , LogPlus.Render
+                    , LogPlus.SizeBytes
                     , T.Log
   default-extensions: ConstraintKinds
                     , DeriveFunctor
