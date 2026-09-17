@@ -243,56 +243,22 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , renderWithStackHead, renderWithTimestamp
                              )
 
+import LogPlus.Compressor         ( Compressor )
 import LogPlus.CompressorIO       ( CompressorIO
-                                  , HasCompressorIO(compressorIO,compressorIOF))
+                                  , HasCompressorIO( compressorIOF ) )
 import LogPlus.CompressorThread   ( CompressorThread )
 import LogPlus.FilenameExtension  ( FilenameExtension
                                   , HasFilenameExtension( appendExtension
-                                                        , filenameExtension
                                                         , filenameExtensionPC )
                                   )
 import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
-import LogPlus.Name               ( HasName( name, nameS ), Name )
+import LogPlus.Name               ( Name )
 -- XXX move this to its own module
 import LogPlus.New                ( new )
 
 import LogPlus.Paths  qualified as  Paths
 
 --------------------------------------------------------------------------------
-
-------------------------------------------------------------
-
-{-| how to compress files -}
-data Compressor = Compressor { -- | name purely for printing (`Show`) purposes
-                               _cmp_name ∷ Name
-                             , -- | takes from,to filenames and does the deed
-                               _cmp_cmpr ∷ CompressorIO
-                             , -- | filename extension to append (after a `.`)
-                               _cmp_ext  ∷ FilenameExtension
-                             }
-
-----------
-
-instance Show Compressor where
-  show c = let e = toString ∘ view filenameExtensionPC $ _cmp_ext c
-           in  [fmt|Compressor: '%s' «%s»|] (c ⊣ nameS) e
-
-----------
-
-instance HasName Compressor where
-  name = lens _cmp_name (\ c n → c { _cmp_name = n })
-
-----------
-
-instance HasCompressorIO Compressor where
-  compressorIO = lens _cmp_cmpr (\ c x → c { _cmp_cmpr = x })
-
-----------
-
-instance HasFilenameExtension Compressor where
-  filenameExtension = lens _cmp_ext (\ c x → c { _cmp_ext = x })
-
-------------------------------------------------------------
 
 -- XXX move & document this
 
@@ -2155,7 +2121,8 @@ logToFiles = logToFiles' (𝓙 fileBatchingOptions)
 ----------------------------------------
 
 compressPzstd ∷ Compressor
-compressPzstd = Compressor "pstzd" (new pzstdIO) (new [pc|zst|])
+compressPzstd = new (new @Name @String "pstzd",new @CompressorIO pzstdIO,
+                     new @FilenameExtension [pc|zst|])
 
 ----------------------------------------
 

@@ -18,7 +18,8 @@ library
                     , Log.HasSeverity
                     , Log.LogEntry
                     , Log.LogRenderOpts
-  other-modules:      LogPlus.CompressorIO
+  other-modules:      LogPlus.Compressor
+                    , LogPlus.CompressorIO
                     , LogPlus.CompressorThread
                     , LogPlus.FilenameExtension
                     , LogPlus.HasAsync
