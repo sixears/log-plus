@@ -55,7 +55,6 @@ import Data.Tuple               ( uncurry )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( toList ) )
 import GHC.Generics             ( Generic )
-import GHC.Num                  ( Num )
 import GHC.Real                 ( Integral, (^), div )
 import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
 
@@ -252,6 +251,8 @@ import LogPlus.FilenameExtension  ( FilenameExtension
                                   )
 import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
 import LogPlus.Name               ( Name )
+import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
+                                  , MaxFiles )
 import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ), MaxFileSize )
 -- XXX move this to its own module
 import LogPlus.New                ( new )
@@ -882,7 +883,7 @@ fileCompressClean opts = do
     stdErrT $ [fmt|Log compress/clean: failed to read '%T': %T|] f e
   let fns    ∷ [AbsFile] = sort (fst ⊳ fes) -- the oldest is listed first
       rms    ∷ [AbsFile] = -- ⊟ 1 to account for the file we're about to write
-        dropEnd (fromIntegral $ (unMaxFiles max_files)⊟1) fns
+        dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
   return (cmprss, rms)
 
@@ -988,20 +989,6 @@ instance MakeFileTimeRotatorState (ℍ, 𝕄 CompressorThread) where
 
 ------------------------------------------------------------
 
-newtype MaxFiles = MaxFiles { unMaxFiles ∷ Word16 } deriving (Enum,Num,Show)
-
---------------------
-
-class HasMaxFiles α where maxFiles ∷ Lens' α MaxFiles
-
-----------
-
-instance HasMaxFiles MaxFiles where maxFiles = lens id (const id)
-
-------------------------------------------------------------
-
-------------------------------------------------------------
-
 class HasCompressorMay α where compressorMay ∷ Lens' α (𝕄 Compressor)
 
 ------------------------------------------------------------
@@ -1074,9 +1061,9 @@ simpleNumberedFilenameGenerator mxf =
                             in  (replicate_ (p ⊟ щ str) '0') ◇ str
 
             -- -1 because we start counting at '0'
-            num = padNumber (numDigits $ unMaxFiles mxf - 1)
+            num = padNumber (numDigits $ (mxf ⊣ maxFiles16) - 1)
 
-        in  (fn ⊙) ∘ parsePC ∘ num $ fromIntegral (unMaxFiles i)
+        in  (fn ⊙) ∘ parsePC ∘ num $ fromIntegral (i ⊣ maxFiles16)
 
   in  NumberedFilenameGenerator name_ go_
 
@@ -1267,7 +1254,7 @@ mkFileTimeRotatorOptions dir pcre =
   let fngen = dayFilenameGenerator
   in  FileTimeRotatorOptions { _ftro_cmprss = 𝓙 compressPzstd
                              , _ftro_perms  = 0o644
-                             , _ftro_mxfs   = MaxFiles 10
+                             , _ftro_mxfs   = new (10 ∷ Word16)
                              , _ftro_fngen  = fngen
                              , _ftro_glob   = pcre
                              , _ftro_dir    = dir
