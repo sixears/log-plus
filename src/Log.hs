@@ -250,6 +250,7 @@ import LogPlus.FilenameExtension  ( FilenameExtension
                                   , HasFilenameExtension( appendExtension
                                                         , filenameExtensionPC )
                                   )
+import LogPlus.FileSizeRotatorState ( FileSizeRotatorState )
 import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
 import LogPlus.Name               ( Name )
@@ -891,53 +892,6 @@ fileCompressClean opts = do
 
 ------------------------------------------------------------
 
-{-| intermediate state for logging to a file which is rotated by size -}
-
-data FileSizeRotatorState =
-  FileSizeRotatorState { -- ^ current filehandle to which logs are being written
-                         _fsrst_handle  ∷ 𝕄 ℍ
-                       , -- ^ size of the file that we are writing to
-                         _fsrst_size    ∷ SizeBytes
-                       , -- ^ thread of the last compressor that we kicked off
-                         _fsrst_cmpthrd ∷ 𝕄 CompressorThread
-                       }
-  deriving Show
-
-----------
-
-instance Default FileSizeRotatorState where def = FileSizeRotatorState 𝓝 0 𝓝
-
-----------
-
-instance HasℍMay FileSizeRotatorState where
-  𝕙May = lens _fsrst_handle (\ f h → f { _fsrst_handle = h })
-
-----------
-
-instance HasSizeBytes FileSizeRotatorState where
-  sizeBytes = lens _fsrst_size (\ f s → f { _fsrst_size = s })
-
-----------
-
-instance HasCompressorThreadMay FileSizeRotatorState where
-  compressorThreadMay = lens _fsrst_cmpthrd (\ f t → f { _fsrst_cmpthrd = t })
-
-------------------------------------------------------------
-
-class MakeFileSizeRotatorState α where mkFSRSt ∷ α → FileSizeRotatorState
-
-----------
-
-instance MakeFileSizeRotatorState (𝕄 ℍ,  SizeBytes,𝕄 CompressorThread) where
-  mkFSRSt (h,s,t) = FileSizeRotatorState h s t
-
-----------
-
-instance MakeFileSizeRotatorState (ℍ,  SizeBytes,𝕄 CompressorThread) where
-  mkFSRSt (h,s,t) = FileSizeRotatorState (𝓙 h) s t
-
-------------------------------------------------------------
-
 {-| intermediate state for logging to a file which is rotated by time -}
 
 data FileTimeRotatorState =
@@ -1292,7 +1246,7 @@ fileSizeRotator opts fn st_ _sds t = do
           then do -- time to make a new handle
             hClose 𝕙
             (𝕙',ṯ) ← mkhandle
-            return (𝕙' ⊣ handle, mkFSRSt (𝕙',l,ṯ))
+            return (𝕙' ⊣ handle, new (𝕙',l,ṯ))
           else -- just return the extant handle
             if and [ thread_is_running ≡ ThreadIsNotRunning
                    , isJust $ st ⊣ compressorThreadMay ]
@@ -1303,7 +1257,7 @@ fileSizeRotator opts fn st_ _sds t = do
                  return (𝕙 ⊣ handle,st & sizeBytes ⊢ bytes_would)
 
     𝓝   → -- no extant handle, so create one
-           mkhandle ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle, mkFSRSt (𝕙',l,ṯ))
+           mkhandle ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle, new (𝕙',l,ṯ))
 
 --------------------
 
