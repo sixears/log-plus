@@ -265,6 +265,7 @@ import LogPlus.New                ( New( new ) )
 import LogPlus.NumberedFilenameGenerator  ( NumberedFilenameGenerator, NumberedFnGen )
 import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
 import LogPlus.StdErr             ( eToStderrIO, stdErrT )
+import LogPlus.TimeFilenameGenerator  ( TimeFilenameGenerator, TimeFnGen )
 
 import LogPlus.Paths  qualified as  Paths
 
@@ -896,32 +897,6 @@ fileCompressClean opts = do
 
 ------------------------------------------------------------
 
-------------------------------------------------------------
-
-type TimeFnGen τ = PathComponent → τ → PathComponent
-
-data TimeFilenameGenerator τ =
-  TimeFilenameGenerator
-    { _tfg_name ∷ 𝕊 -- ^ just for `Show`
-    , _tfg_fngen ∷ TimeFnGen τ }
-
-----------
-
-instance Show (TimeFilenameGenerator τ) where
-  show = _tfg_name
-
-----------
-
-instance New (TimeFilenameGenerator τ) (𝕊, TimeFnGen τ) where
-  new (s,g) = TimeFilenameGenerator s g
-
-----------
-
-instance FilenameGenerator (TimeFilenameGenerator τ) (TimeFnGen τ) where
-  filenameGenerator = _tfg_fngen
-
-------------------------------------------------------------
-
 class HasPerms α where perms ∷ Lens' α FileMode
 
 ------------------------------------------------------------
@@ -1038,12 +1013,13 @@ mkFileSizeRotatorOptions mxf =
 ------------------------------------------------------------
 
 {-| a simple time generator, which adds the date to the end of a filename -}
-dayFilenameGenerator ∷ (FormatTime τ, Show τ) => TimeFilenameGenerator τ
+dayFilenameGenerator ∷ ∀ τ . (FormatTime τ, Show τ) => TimeFilenameGenerator τ
 dayFilenameGenerator =
-  let formatDate = formatTime defaultTimeLocale "-%Y-%m-%d"
-      pcDate     = __parseS__ ∘ formatDate
-  in  TimeFilenameGenerator { _tfg_name = "dayFilenameGenerator"
-                            , _tfg_fngen = \ pc_ d → pc_ ◇ pcDate d }
+  let formatDate  = formatTime defaultTimeLocale "-%Y-%m-%d"
+      pcDate      = __parseS__ ∘ formatDate
+      pcGen pc_ d = pc_ ◇ pcDate d
+      name_       = "dayFilenameGenerator"
+  in  new @(TimeFilenameGenerator τ) @(𝕊,TimeFnGen τ) (name_,pcGen)
 
 ------------------------------------------------------------
 
