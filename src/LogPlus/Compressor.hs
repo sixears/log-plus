@@ -1,5 +1,5 @@
 module LogPlus.Compressor
-  ( Compressor )
+  ( Compressor, HasCompressorMay( compressorMay ) )
 where
 
 import Base1T
@@ -55,5 +55,14 @@ instance HasCompressorIO Compressor where
 
 instance HasFilenameExtension Compressor where
   filenameExtension = lens _cmp_ext (\ c x → c { _cmp_ext = x })
+
+------------------------------------------------------------
+
+class HasCompressorMay α where compressorMay ∷ Lens' α (𝕄 Compressor)
+
+----------
+
+instance HasCompressorMay (𝕄 Compressor) where
+  compressorMay = lens id (const id)
 
 -- that's all, folks! ----------------------------------------------------------

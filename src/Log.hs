@@ -240,7 +240,8 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , renderWithStackHead, renderWithTimestamp
                              )
 
-import LogPlus.Compressor         ( Compressor )
+import LogPlus.Compressor         ( Compressor
+                                  , HasCompressorMay( compressorMay ) )
 import LogPlus.CompressorIO       ( CompressorIO
                                   , HasCompressorIO( compressorIOF ) )
 import LogPlus.CompressorThread   ( CompressorThread
@@ -890,10 +891,6 @@ fileCompressClean opts = do
         dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
   return (cmprss, rms)
-
-------------------------------------------------------------
-
-class HasCompressorMay α where compressorMay ∷ Lens' α (𝕄 Compressor)
 
 ------------------------------------------------------------
 
