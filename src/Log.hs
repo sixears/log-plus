@@ -251,6 +251,7 @@ import LogPlus.FilenameExtension  ( FilenameExtension
                                   , HasFilenameExtension( appendExtension
                                                         , filenameExtensionPC )
                                   )
+import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
 import LogPlus.FileSizeRotatorState ( FileSizeRotatorState )
 import LogPlus.FileTimeRotatorState ( FileTimeRotatorState )
 import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
@@ -891,11 +892,6 @@ fileCompressClean opts = do
         dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
   return (cmprss, rms)
-
-------------------------------------------------------------
-
-class FilenameGenerator α β where
-  filenameGenerator ∷ α → β
 
 ------------------------------------------------------------
 
