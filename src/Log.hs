@@ -261,7 +261,7 @@ import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
                                   , MaxFiles )
 import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ), MaxFileSize )
 -- XXX move this to its own module
-import LogPlus.New                ( new )
+import LogPlus.New                ( New( new ) )
 import LogPlus.NumberedFilenameGenerator  ( NumberedFilenameGenerator, NumberedFnGen )
 import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
 import LogPlus.StdErr             ( eToStderrIO, stdErrT )
@@ -903,12 +903,17 @@ type TimeFnGen τ = PathComponent → τ → PathComponent
 data TimeFilenameGenerator τ =
   TimeFilenameGenerator
     { _tfg_name ∷ 𝕊 -- ^ just for `Show`
-    , _tfg_fngen ∷ PathComponent → τ → PathComponent }
+    , _tfg_fngen ∷ TimeFnGen τ }
 
 ----------
 
 instance Show (TimeFilenameGenerator τ) where
   show = _tfg_name
+
+----------
+
+instance New (TimeFilenameGenerator τ) (𝕊, TimeFnGen τ) where
+  new (s,g) = TimeFilenameGenerator s g
 
 ----------
 
