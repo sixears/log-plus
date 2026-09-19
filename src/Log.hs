@@ -263,6 +263,7 @@ import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ), MaxFileSize )
 -- XXX move this to its own module
 import LogPlus.New                ( New( new ) )
 import LogPlus.NumberedFilenameGenerator  ( NumberedFilenameGenerator, NumberedFnGen )
+import LogPlus.Perms              ( HasPerms( perms ) )
 import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
 import LogPlus.StdErr             ( eToStderrIO, stdErrT )
 import LogPlus.TimeFilenameGenerator  ( TimeFilenameGenerator, TimeFnGen )
@@ -894,10 +895,6 @@ fileCompressClean opts = do
         dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
   return (cmprss, rms)
-
-------------------------------------------------------------
-
-class HasPerms α where perms ∷ Lens' α FileMode
 
 ------------------------------------------------------------
 
