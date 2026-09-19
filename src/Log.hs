@@ -251,6 +251,7 @@ import LogPlus.FilenameExtension  ( FilenameExtension
                                                         , filenameExtensionPC )
                                   )
 import LogPlus.FileSizeRotatorState ( FileSizeRotatorState )
+import LogPlus.FileTimeRotatorState ( FileTimeRotatorState )
 import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
 import LogPlus.Name               ( Name )
@@ -892,41 +893,6 @@ fileCompressClean opts = do
 
 ------------------------------------------------------------
 
-{-| intermediate state for logging to a file which is rotated by time -}
-
-data FileTimeRotatorState =
-  FileTimeRotatorState { -- ^ current filehandle to which logs are being written
-                         _ftrst_handle   ∷ 𝕄 ℍ
-                       , -- ^ thread of the last compressor that we kicked off
-                         _ftrst_cmpthrd  ∷ 𝕄 CompressorThread
-                       }
-  deriving Show
-
-----------
-
-instance Default FileTimeRotatorState where def = FileTimeRotatorState 𝓝 𝓝
-
-----------
-
-instance HasℍMay FileTimeRotatorState where
-  𝕙May = lens _ftrst_handle (\ f h → f { _ftrst_handle = h })
-
-----------
-
-instance HasCompressorThreadMay FileTimeRotatorState where
-  compressorThreadMay = lens _ftrst_cmpthrd (\ f t → f { _ftrst_cmpthrd = t })
-
-------------------------------------------------------------
-
-class MakeFileTimeRotatorState α where mkFTRSt ∷ α → FileTimeRotatorState
-
-----------
-
-instance MakeFileTimeRotatorState (ℍ, 𝕄 CompressorThread) where
-  mkFTRSt (h,t) = FileTimeRotatorState (𝓙 h) t
-
-------------------------------------------------------------
-
 class HasCompressorMay α where compressorMay ∷ Lens' α (𝕄 Compressor)
 
 ------------------------------------------------------------
@@ -1474,7 +1440,7 @@ fileTimeRotator_ opts pc_ d st_ _sds _t = do
           then do -- time to make a new handle
             hClose 𝕙
             (𝕙',ṯ) ← mkhandle fn
-            return (𝕙' ⊣ handle, mkFTRSt (𝕙',ṯ))
+            return (𝕙' ⊣ handle, new (𝕙',ṯ))
           else -- just return the extant handle
             if and [ thread_is_running ≡ ThreadIsNotRunning
                    , isJust $ st ⊣ compressorThreadMay ]
@@ -1483,7 +1449,7 @@ fileTimeRotator_ opts pc_ d st_ _sds _t = do
             else return (𝕙 ⊣ handle,st)
 
     𝓝   → -- no extant handle, so create one
-           mkhandle fn ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle, mkFTRSt (𝕙',ṯ))
+           mkhandle fn ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle, new (𝕙',ṯ))
 
 ----------------------------------------
 
