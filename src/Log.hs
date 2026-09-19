@@ -17,7 +17,7 @@ module Log
   , stackParses, stdRenderers
   , logFilter, mapLog, mapLogE
   -- XXX , fileTimeRotator
-  , fileSizeRotator, mkFileSizeRotatorOptions
+  , fileSizeRotator
 
   , HasCompressorMay( compressorMay )
 
@@ -991,21 +991,20 @@ instance FilenameGenerator FileSizeRotatorOptions NumberedFnGen where
 ----------
 
 {- A default set of `FileSizeRotatorOptions`, which takes a logfile basename;
-   compresses the files, sets a max size of 100MiB, perms of -rw-r--r--, maxFiles
-   of ten files, and using the `simpleNumberedFilenameGenerator` to append a
-   log number on old files (after a `.`), padded with enough digits to allow for
-   the maximum number of files.
-
+   compresses the files, sets a max size of 100MiB, perms of -rw-r--r--,
+   maxFiles of ten files, and using the `simpleNumberedFilenameGenerator` to
+   append a log number on old files (after a `.`), padded with enough digits to
+   allow for the maximum number of files.
  -}
-mkFileSizeRotatorOptions ∷ MaxFiles → FileSizeRotatorOptions
-mkFileSizeRotatorOptions mxf =
-  let fngen = simpleNumberedFilenameGenerator mxf
-  in  FileSizeRotatorOptions { _fsro_cmprss = 𝓙 compressPzstd
-                             , _fsro_mxsz   = 100 × 1_024^(3∷Word8) -- 100MiB
-                             , _fsro_perms  = 0o644
-                             , _fsro_mxfs   = mxf
-                             , _fsro_fngen  = fngen
-                             }
+instance New FileSizeRotatorOptions MaxFiles where
+  new mxf =
+    let fngen = simpleNumberedFilenameGenerator mxf
+    in  FileSizeRotatorOptions { _fsro_cmprss = 𝓙 compressPzstd
+                               , _fsro_mxsz   = 100 × 1_024^(3∷Word8) -- 100MiB
+                               , _fsro_perms  = 0o644
+                               , _fsro_mxfs   = mxf
+                               , _fsro_fngen  = fngen
+                               }
 
 ------------------------------------------------------------
 
@@ -1191,7 +1190,7 @@ fileSizeRotatorTests =
                       [(AbsDir, FPathIOError)]
                      )
       do_log c d  = ж @IOError ∘ inDir d $ do
-        let opts    = (mkFileSizeRotatorOptions 10) & compressorMay ⊢ c
+        let opts    = (new @_ @MaxFiles 10) & compressorMay ⊢ c
                                                     & maxFileSize   ⊢ 10
                                                     & maxFiles      ⊢ 3
             rot     = fileSizeRotator opts (d ⫻ [relfile|logfile|])
