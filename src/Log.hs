@@ -243,7 +243,8 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
 import LogPlus.Compressor         ( Compressor )
 import LogPlus.CompressorIO       ( CompressorIO
                                   , HasCompressorIO( compressorIOF ) )
-import LogPlus.CompressorThread   ( CompressorThread )
+import LogPlus.CompressorThread   ( CompressorThread
+                                  , HasCompressorThreadMay(compressorThreadMay))
 import LogPlus.EMonad             ( ꙝ, ꙝ' )
 import LogPlus.FilenameExtension  ( FilenameExtension
                                   , HasFilenameExtension( appendExtension
@@ -887,20 +888,6 @@ fileCompressClean opts = do
         dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
   return (cmprss, rms)
-
-------------------------------------------------------------
-
-class HasCompressorThreadMay α where
-  compressorThreadMay ∷ Lens' α (𝕄 CompressorThread)
-  compressorThreadAsyncMay ∷ Lens' α (𝕄 (Async ()))
-  compressorThreadAsyncMay =
-    lens (view async_ ⩺ view compressorThreadMay)
-         (\ a x → a & compressorThreadMay ⊢ (new ⊳ x))
-
-----------
-
-instance HasCompressorThreadMay (𝕄 CompressorThread) where
-  compressorThreadMay = lens id (const id)
 
 ------------------------------------------------------------
 

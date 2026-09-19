@@ -1,5 +1,5 @@
 module LogPlus.CompressorThread
- ( CompressorThread )
+ ( CompressorThread, HasCompressorThreadMay( compressorThreadMay ) )
 where
 
 import Base1T
@@ -32,5 +32,15 @@ instance HasAsync CompressorThread () where
 ----------
 
 instance Show CompressorThread where show _ = "CompressorThread"
+
+------------------------------------------------------------
+
+class HasCompressorThreadMay α where
+  compressorThreadMay ∷ Lens' α (𝕄 CompressorThread)
+
+----------
+
+instance HasCompressorThreadMay (𝕄 CompressorThread) where
+  compressorThreadMay = lens id (const id)
 
 -- that's all, folks! ----------------------------------------------------------
