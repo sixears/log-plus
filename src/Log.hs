@@ -250,6 +250,7 @@ import LogPlus.FilenameExtension  ( FilenameExtension
                                                         , filenameExtensionPC )
                                   )
 import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
+import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
 import LogPlus.Name               ( Name )
 import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
                                   , MaxFiles )
@@ -886,10 +887,6 @@ fileCompressClean opts = do
         dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
   return (cmprss, rms)
-
-------------------------------------------------------------
-
-class HasℍMay α where 𝕙May ∷ Lens' α (𝕄 ℍ)
 
 ------------------------------------------------------------
 
