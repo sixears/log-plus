@@ -262,6 +262,7 @@ import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
 import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ), MaxFileSize )
 -- XXX move this to its own module
 import LogPlus.New                ( new )
+import LogPlus.NumberedFilenameGenerator  ( NumberedFilenameGenerator, NumberedFnGen )
 import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
 import LogPlus.StdErr             ( eToStderrIO, stdErrT )
 
@@ -895,23 +896,6 @@ fileCompressClean opts = do
 
 ------------------------------------------------------------
 
-type NumberedFnGen = AbsFile → 𝕄 MaxFiles → AbsFile
-
-data NumberedFilenameGenerator =
-  NumberedFilenameGenerator
-    { _nfg_name  ∷ 𝕊 -- ^ just for `Show`
-    , _nfg_fngen ∷ NumberedFnGen }
-
-----------
-
-instance Show NumberedFilenameGenerator where
-  show = _nfg_name
-
-----------
-
-instance FilenameGenerator NumberedFilenameGenerator NumberedFnGen where
-  filenameGenerator = _nfg_fngen
-
 ------------------------------------------------------------
 
 type TimeFnGen τ = PathComponent → τ → PathComponent
@@ -962,7 +946,7 @@ simpleNumberedFilenameGenerator mxf =
 
         in  (fn ⊙) ∘ parsePC ∘ num $ fromIntegral (i ⊣ maxFiles16)
 
-  in  NumberedFilenameGenerator name_ go_
+  in  new @NumberedFilenameGenerator @(𝕊,NumberedFnGen) (name_,go_)
 
 ------------------------------------------------------------
 
