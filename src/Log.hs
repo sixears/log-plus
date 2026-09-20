@@ -55,7 +55,7 @@ import Data.Tuple               ( uncurry )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( toList ) )
 import GHC.Generics             ( Generic )
-import GHC.Real                 ( Integral, (^), div )
+import GHC.Real                 ( (^) )
 import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
 
 -- base-unicode-symbols ----------------
@@ -153,8 +153,7 @@ import Control.Monad.Identity  ( runIdentity )
 
 import Natural            ( (⊟) )
 import Natural.Length     ( щ )
-import Natural.Replicate  ( replicate_ )
-import Natural.Unsigned   ( I64, Unsigned, ɨ )
+import Natural.Unsigned   ( ɨ )
 
 -- parsec-plus -------------------------
 
@@ -262,7 +261,7 @@ import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
 import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ), MaxFileSize )
 -- XXX move this to its own module
 import LogPlus.New                ( New( new ) )
-import LogPlus.NumberedFilenameGenerator  ( NumberedFilenameGenerator, NumberedFnGen )
+import LogPlus.NumberedFilenameGenerator  ( NumberedFilenameGenerator, NumberedFnGen, simpleNumberedFilenameGenerator )
 import LogPlus.Perms              ( HasPerms( perms ) )
 import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
 import LogPlus.StdErr             ( eToStderrIO, stdErrT )
@@ -849,6 +848,7 @@ fileNumberedMoves ∷ MonadIO μ => AbsFile → FileSizeRotatorOptions → 𝕄
                                → μ [(AbsFile, AbsFile, 𝕄 Compressor)]
 fileNumberedMoves fn opts ɦ =
   let compress    = opts ⊣ compressorMay
+      fngen       ∷ AbsFile → 𝕄 MaxFiles → AbsFile -- XXX
       fngen       = filenameGenerator opts
       max_files   = opts ⊣ maxFiles
       fngen' i    = maybe id appendExtension compress $ fngen fn i
@@ -895,35 +895,6 @@ fileCompressClean opts = do
         dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
   return (cmprss, rms)
-
-------------------------------------------------------------
-
-{-| a simple filename generator, which adds (0-based) denary numbers to the end
-    of the filename (after a '.') but pads them out to the required length as per
-    `mxf` -}
-simpleNumberedFilenameGenerator ∷ MaxFiles → NumberedFilenameGenerator
-simpleNumberedFilenameGenerator mxf =
-  let name_ = "simpleNumberedFilenameGenerator (" ◇ show mxf ◇ ")"
-      parsePC = __parseS__ @PathComponent
-      go_ fn 𝓝    = fn
-      go_ fn (𝓙 i) =
-        let numDigits ∷ (Integral α, Unsigned α) => α → I64
-            numDigits 0 = 1
-            numDigits n = countDigits n
-              where
-                countDigits 0 = 0
-                countDigits x = 1 + countDigits (x `div` 10)
-
-            padNumber ∷ I64 → I64 → 𝕊
-            padNumber p n = let str = show n
-                            in  (replicate_ (p ⊟ щ str) '0') ◇ str
-
-            -- -1 because we start counting at '0'
-            num = padNumber (numDigits $ (mxf ⊣ maxFiles16) - 1)
-
-        in  (fn ⊙) ∘ parsePC ∘ num $ fromIntegral (i ⊣ maxFiles16)
-
-  in  new @NumberedFilenameGenerator @(𝕊,NumberedFnGen) (name_,go_)
 
 ------------------------------------------------------------
 
