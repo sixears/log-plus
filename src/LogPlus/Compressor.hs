@@ -1,12 +1,28 @@
 module LogPlus.Compressor
-  ( Compressor, HasCompressorMay( compressorMay ) )
+  ( Compressor, HasCompressorMay( compressorMay ), compressPzstd )
 where
 
 import Base1T
 
+-- base --------------------------------
+
+import Data.Tuple  ( uncurry )
+
+-- fpath -------------------------------
+
+import FPath.AbsFile        ( AbsFile )
+import FPath.PathComponent  ( pc )
+
 -- lens --------------------------------
 
 import Control.Lens.Getter  ( view )
+
+-- monadio-plus ------------------------
+
+import MonadIO.File                   ( devnull )
+import MonadIO.Error.CreateProcError  ( ProcError )
+import MonadIO.Process                ( doProc )
+import MonadIO.Process.CmdSpec        ( mkCmd )
 
 ------------------------------------------------------------
 --                     local imports                       -
@@ -18,6 +34,9 @@ import LogPlus.FilenameExtension  ( FilenameExtension
                                                         , filenameExtensionPC ))
 import LogPlus.Name               ( HasName( name, nameS ), Name )
 import LogPlus.New                ( New( new ) )
+import LogPlus.StdErr             ( eToStderrIO )
+
+import LogPlus.Paths  qualified as  Paths
 
 --------------------------------------------------------------------------------
 
@@ -64,5 +83,21 @@ class HasCompressorMay α where compressorMay ∷ Lens' α (𝕄 Compressor)
 
 instance HasCompressorMay (𝕄 Compressor) where
   compressorMay = lens id (const id)
+
+------------------------------------------------------------
+
+compressPzstd ∷ Compressor
+compressPzstd =
+  let pzstd ∷ MonadIO μ => AbsFile → AbsFile → ExceptT ProcError μ ()
+      pzstd f t = do
+        let args = ["--quiet", "--check", toText f, "-o", toText t, "--rm"]
+            exe  = Paths.pzstd
+        null ← devnull
+        () ← snd ⊳ doProc (return ()) null (uncurry mkCmd (exe,args))
+        return ()
+      pzstdIO ∷ AbsFile → AbsFile → IO ()
+      pzstdIO f t = join $ eToStderrIO ⊳ (ѥ @ProcError $ pzstd f t)
+  in  new (new @Name @String "pstzd",new @CompressorIO pzstdIO,
+           new @FilenameExtension [pc|zst|])
 
 -- that's all, folks! ----------------------------------------------------------
