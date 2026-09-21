@@ -249,6 +249,7 @@ import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
 import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
 import LogPlus.FileSizeRotatorState  ( FileSizeRotatorState )
 import LogPlus.FileTimeRotatorState  ( FileTimeRotatorState )
+import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
 import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
@@ -889,10 +890,6 @@ class HasAbsDir α where absDir_ ∷ Lens' α AbsDir
 ----------
 
 instance HasAbsDir AbsDir where absDir_ = lens id (const id)
-
-------------------------------------------------------------
-
-class HasGlobPCRERegex α where globPCRERegex ∷ Lens' α GlobPCRERegex
 
 ------------------------------------------------------------
 
