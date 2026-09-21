@@ -1,12 +1,17 @@
 module LogPlus.TimeFilenameGenerator
-  ( TimeFilenameGenerator, TimeFnGen )
+  ( TimeFilenameGenerator, TimeFnGen, dayFilenameGenerator )
 where
 
 import Base1T
 
 -- fpath -------------------------------
 
+import FPath.Parseable      ( __parseS__ )
 import FPath.PathComponent  ( PathComponent )
+
+-- time --------------------------------
+
+import Data.Time.Format  ( FormatTime, defaultTimeLocale, formatTime )
 
 ------------------------------------------------------------
 --                     local imports                      --
@@ -38,5 +43,16 @@ instance New (TimeFilenameGenerator τ) (𝕊, TimeFnGen τ) where
 
 instance FilenameGenerator (TimeFilenameGenerator τ) (TimeFnGen τ) where
   filenameGenerator = _tfg_fngen
+
+------------------------------------------------------------
+
+{-| a simple time generator, which adds the date to the end of a filename -}
+dayFilenameGenerator ∷ ∀ τ . (FormatTime τ, Show τ) => TimeFilenameGenerator τ
+dayFilenameGenerator =
+  let formatDate  = formatTime defaultTimeLocale "-%Y-%m-%d"
+      pcDate      = __parseS__ ∘ formatDate
+      pcGen pc_ d = pc_ ◇ pcDate d
+      name_       = "dayFilenameGenerator"
+  in  new @(TimeFilenameGenerator τ) @(𝕊,TimeFnGen τ) (name_,pcGen)
 
 -- that's all, folks! ----------------------------------------------------------

@@ -92,7 +92,6 @@ import FPath.AbsFile           ( AbsFile )
 import FPath.Basename          ( basename )
 import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
 import FPath.FileLike          ( (⊙) )
-import FPath.Parseable         ( __parseS__ )
 import FPath.PathComponent     ( PathComponent, pc )
 import FPath.RelFile           ( _RelFile_, relfile )
 
@@ -214,8 +213,7 @@ import qualified  Text.Printer  as  P
 
 import Data.Time.Calendar.OrdinalDate  ( fromOrdinalDate )
 import Data.Time.Clock                 ( getCurrentTime )
-import Data.Time.Format                ( FormatTime
-                                       , defaultTimeLocale, formatTime )
+import Data.Time.Format                ( FormatTime )
 
 -- unix --------------------------------
 
@@ -260,7 +258,7 @@ import LogPlus.New                ( New( new ) )
 import LogPlus.Perms              ( HasPerms( perms ) )
 import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
 import LogPlus.StdErr             ( stdErrT )
-import LogPlus.TimeFilenameGenerator  ( TimeFilenameGenerator, TimeFnGen )
+import LogPlus.TimeFilenameGenerator  ( TimeFilenameGenerator, TimeFnGen, dayFilenameGenerator )
 
 --------------------------------------------------------------------------------
 
@@ -874,17 +872,6 @@ fileCompressClean opts = do
 
 ------------------------------------------------------------
 
-{-| a simple time generator, which adds the date to the end of a filename -}
-dayFilenameGenerator ∷ ∀ τ . (FormatTime τ, Show τ) => TimeFilenameGenerator τ
-dayFilenameGenerator =
-  let formatDate  = formatTime defaultTimeLocale "-%Y-%m-%d"
-      pcDate      = __parseS__ ∘ formatDate
-      pcGen pc_ d = pc_ ◇ pcDate d
-      name_       = "dayFilenameGenerator"
-  in  new @(TimeFilenameGenerator τ) @(𝕊,TimeFnGen τ) (name_,pcGen)
-
-------------------------------------------------------------
-
 class HasAbsDir α where absDir_ ∷ Lens' α AbsDir
 
 ----------
@@ -968,17 +955,16 @@ instance HasGlobPCRERegex (FileTimeRotatorOptions τ) where
    the maximum number of files.
 
  -}
-mkFileTimeRotatorOptions ∷ (FormatTime τ, Show τ) =>
-                           AbsDir → GlobPCRERegex → FileTimeRotatorOptions τ
-mkFileTimeRotatorOptions dir pcre =
-  let fngen = dayFilenameGenerator
-  in  FileTimeRotatorOptions { _ftro_cmprss = 𝓙 compressPzstd
-                             , _ftro_perms  = 0o644
-                             , _ftro_mxfs   = new (10 ∷ Word16)
-                             , _ftro_fngen  = fngen
-                             , _ftro_glob   = pcre
-                             , _ftro_dir    = dir
-                             }
+instance (FormatTime τ, Show τ) => New (FileTimeRotatorOptions τ)
+                                       (AbsDir,GlobPCRERegex)     where
+  new (dir,pcre) = let fngen = dayFilenameGenerator
+                   in  FileTimeRotatorOptions { _ftro_cmprss = 𝓙 compressPzstd
+                                              , _ftro_perms  = 0o644
+                                              , _ftro_mxfs   = new (10 ∷ Word16)
+                                              , _ftro_fngen  = fngen
+                                              , _ftro_glob   = pcre
+                                              , _ftro_dir    = dir
+                                              }
 
 ------------------------------------------------------------
 
@@ -1279,8 +1265,7 @@ fileTimeRotatorTests =
                      )
       do_log c d  = ж @IOError ∘ inDir d $ do
         let opts    = let pcre = mkGlobRegex ("logfile-.*"∷𝕊)
-                      in  mkFileTimeRotatorOptions d pcre & compressorMay ⊢ c
-                                                          & maxFiles      ⊢ 3
+                      in  new (d,pcre) & compressorMay ⊢ c & maxFiles ⊢ 3
             rot x   =
               \ st w t → do
                 (h,st') ← fileTimeRotator_ opts ([pc|logfile|])
