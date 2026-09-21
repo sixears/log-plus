@@ -234,6 +234,7 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , renderWithStackHead, renderWithTimestamp
                              )
 
+import LogPlus.Async              ( HasAsync( async_, waitAsync ) )
 import LogPlus.Compressor         ( Compressor
                                   , HasCompressorMay( compressorMay )
                                   , compressPzstd
@@ -250,7 +251,6 @@ import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
 import LogPlus.FileSizeRotatorState  ( FileSizeRotatorState )
 import LogPlus.FileTimeRotatorState  ( FileTimeRotatorState )
 import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
-import LogPlus.HasAsync           ( HasAsync( async_, waitAsync ) )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
 import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
                                   , MaxFiles )

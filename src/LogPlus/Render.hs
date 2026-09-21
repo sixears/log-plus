@@ -49,7 +49,7 @@ import Text.Fmt  ( formatUTCYDoW )
 
 import Log.HasSeverity  ( HasSeverity( severity ) )
 
-import LogPlus.HasUTCTime  ( HasUTCTimeY( utcTimeY ), )
+import LogPlus.UTCTime  ( HasUTCTimeY( utcTimeY ), )
 
 --------------------------------------------------------------------------------
 

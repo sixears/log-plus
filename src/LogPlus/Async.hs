@@ -1,4 +1,4 @@
-module LogPlus.HasAsync
+module LogPlus.Async
   ( HasAsync(..) )
 where
 

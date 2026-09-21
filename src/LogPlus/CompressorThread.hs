@@ -12,8 +12,8 @@ import Control.Concurrent.Async  ( Async )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import LogPlus.HasAsync  ( HasAsync( async_ ) )
-import LogPlus.New       ( New( new ) )
+import LogPlus.Async  ( HasAsync( async_ ) )
+import LogPlus.New    ( New( new ) )
 
 --------------------------------------------------------------------------------
 

@@ -61,9 +61,9 @@ import Data.Time.Clock     ( UTCTime( UTCTime ), diffUTCTime,secondsToDiffTime )
 --                     local imports                      ---
 -----------------------------------------------------------
 
-import Log.HasSeverity   ( HasSeverity( severity ) )
+import Log.HasSeverity  ( HasSeverity( severity ) )
 
-import LogPlus.HasUTCTime    ( HasUTCTimeY( utcTimeY ) )
+import LogPlus.UTCTime  ( HasUTCTimeY( utcTimeY ) )
 
 --------------------------------------------------------------------------------
 

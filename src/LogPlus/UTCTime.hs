@@ -1,4 +1,4 @@
-module LogPlus.HasUTCTime
+module LogPlus.UTCTime
   ( HasUTCTime( utcTime ), HasUTCTimeY( utcTimeY ) )
 where
 

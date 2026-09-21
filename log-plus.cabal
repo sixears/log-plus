@@ -18,17 +18,27 @@ library
                     , Log.HasSeverity
                     , Log.LogEntry
                     , Log.LogRenderOpts
-  other-modules:      LogPlus.Compressor
+  other-modules:      LogPlus.Async
+                    , LogPlus.Compressor
                     , LogPlus.CompressorIO
                     , LogPlus.CompressorThread
                     , LogPlus.FilenameExtension
-                    , LogPlus.HasAsync
-                    , LogPlus.HasUTCTime
+                    , LogPlus.FilenameGenerator
+                    , LogPlus.FileSizeRotatorOptions
+                    , LogPlus.FileSizeRotatorState
+                    , LogPlus.FileTimeRotatorState
+                    , LogPlus.GlobPCRERegex
+                    , LogPlus.𝕙May
+                    , LogPlus.MaxFiles
                     , LogPlus.MaxFileSize
                     , LogPlus.Name
+                    , LogPlus.NumberedFilenameGenerator
                     , LogPlus.Paths
+                    , LogPlus.Perms
                     , LogPlus.Render
                     , LogPlus.SizeBytes
+                    , LogPlus.TimeFilenameGenerator
+                    , LogPlus.UTCTime
                     , T.Log
   default-extensions: ConstraintKinds
                     , DeriveFunctor
