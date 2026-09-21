@@ -1,5 +1,5 @@
 module Log
-  ( CSOpt(..), FileTimeRotatorOptions(..)
+  ( CSOpt(..)
   , Log, ToDoc_( toDoc_ )
   , WithLog, WithLogIO
 
@@ -119,7 +119,7 @@ import MonadError.IO.Error  ( IOError )
 
 -- monadio-plus ------------------------
 
-import MonadIO.Directory              ( GlobPCRERegex, directoryList, glob
+import MonadIO.Directory              ( directoryList, glob
                                       , inDir, listdirStdOut, mkGlobRegex
                                       )
 import MonadIO.File                   ( chmod, rename, unlink )
@@ -213,7 +213,6 @@ import qualified  Text.Printer  as  P
 
 import Data.Time.Calendar.OrdinalDate  ( fromOrdinalDate )
 import Data.Time.Clock                 ( getCurrentTime )
-import Data.Time.Format                ( FormatTime )
 
 -- unix --------------------------------
 
@@ -232,6 +231,9 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , renderWithStackHead, renderWithTimestamp
                              )
 
+{- XXX Move this to FPath, create instances for all main types there (incl.
+       File, Dir, FPath) -}
+import LogPlus.AbsDir             ( absDir_ )
 import LogPlus.Async              ( HasAsync( async_, waitAsync ) )
 import LogPlus.Compressor         ( Compressor
                                   , HasCompressorMay( compressorMay )
@@ -259,7 +261,6 @@ import LogPlus.New                ( New( new ) )
 import LogPlus.Perms              ( HasPerms( perms ) )
 import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
 import LogPlus.StdErr             ( stdErrT )
-import LogPlus.TimeFilenameGenerator  ( TimeFilenameGenerator, TimeFnGen, dayFilenameGenerator )
 
 --------------------------------------------------------------------------------
 
@@ -873,13 +874,6 @@ fileCompressClean opts = do
 
 ------------------------------------------------------------
 
-class HasAbsDir α where absDir_ ∷ Lens' α AbsDir
-
-----------
-
-instance HasAbsDir AbsDir where absDir_ = lens id (const id)
-
-------------------------------------------------------------
 {- XXX
 
 {-| options for fileTimeRotator -}
