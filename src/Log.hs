@@ -247,6 +247,7 @@ import LogPlus.FilenameExtension  ( HasFilenameExtension( appendExtension
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
 import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
 import LogPlus.FileSizeRotatorState  ( FileSizeRotatorState )
+import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState  ( FileTimeRotatorState )
 import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
@@ -879,6 +880,7 @@ class HasAbsDir α where absDir_ ∷ Lens' α AbsDir
 instance HasAbsDir AbsDir where absDir_ = lens id (const id)
 
 ------------------------------------------------------------
+{- XXX
 
 {-| options for fileTimeRotator -}
 data FileTimeRotatorOptions τ =
@@ -965,6 +967,8 @@ instance (FormatTime τ, Show τ) => New (FileTimeRotatorOptions τ)
                                               , _ftro_glob   = pcre
                                               , _ftro_dir    = dir
                                               }
+
+-}
 
 ------------------------------------------------------------
 
