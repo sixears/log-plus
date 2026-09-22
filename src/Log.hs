@@ -68,10 +68,6 @@ import Data.DList  ( DList, singleton )
 
 import Control.Monad.Catch  ( MonadMask )
 
--- extra -------------------------------
-
-import Data.List.Extra  ( dropEnd )
-
 -- fstat -------------------------------
 
 import FStat  ( FStat, size )
@@ -82,7 +78,7 @@ import FPath                   ( (⫻), stripDirFPE )
 import FPath.AbsDir            ( AbsDir )
 import FPath.AbsFile           ( AbsFile )
 import FPath.Basename          ( basename )
-import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
+import FPath.Error.FPathError  ( FPathIOError )
 import FPath.PathComponent     ( PathComponent, pc )
 import FPath.RelFile           ( _RelFile_, relfile )
 
@@ -108,9 +104,8 @@ import MonadError.IO.Error  ( IOError )
 
 -- monadio-plus ------------------------
 
-import MonadIO.Directory              ( directoryList, glob
-                                      , inDir, listdirStdOut, mkGlobRegex
-                                      )
+import MonadIO.Directory              ( directoryList, inDir, listdirStdOut
+                                      , mkGlobRegex )
 import MonadIO.File                   ( unlink )
 import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
                                         handle, hClose, hname )
@@ -130,10 +125,6 @@ import Data.MonoTraversable  ( Element
 -- mtl ---------------------------------
 
 import Control.Monad.Identity  ( runIdentity )
-
--- natural -----------------------------
-
-import Natural  ( (⊟) )
 
 -- parsec-plus -------------------------
 
@@ -161,7 +152,7 @@ import Prettyprinter.Render.Terminal  ( AnsiStyle )
 
 -- safe --------------------------------
 
-import Safe  ( headDef, lastMay )
+import Safe  ( headDef )
 
 -- single ------------------------------
 
@@ -219,7 +210,7 @@ import LogPlus.AbsDir             ( HasAbsDir( absDir_ ) )
 import LogPlus.Async              ( HasAsync( waitAsync ) )
 import LogPlus.Compressor         ( Compressor
                                   , HasCompressorMay( compressorMay )
-                                  , compressPzstd
+                                  , compressPzstd, fileCompressClean
                                   )
 import LogPlus.CompressorThread   ( CompressorThread
                                   , HasCompressorThreadMay(compressorThreadMay)
@@ -229,9 +220,8 @@ import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
 import LogPlus.FileSizeRotator    ( fileSizeRotator )
 import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState  ( FileTimeRotatorState )
-import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
-import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
+import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles )
                                   , MaxFiles )
 import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ) )
 -- XXX move this to its own module
@@ -928,38 +918,6 @@ fileSizeRotatorTests =
              -}
             )
         ]
-
-----------------------------------------
-
-{-| Provide the name of a file to compress (if any), and a list of older files
-    to purge.  "Old" is determined by filename, which are assumed to be written
-    in a lexical format that makes the oldest file lexically the first (e.g.,
-    "logfile-2026-09-09").
-
-    This doesn't actually perform any destructive IO (just some `stat`s and
-    directory reads); rather it provides a list of instructions.
--}
-
--- XXX how are we checking for which files need compressing?
--- XXX use EMonad and friends?
-fileCompressClean ∷ ∀ ε φ μ .
-                    (MonadIO μ, AsIOError ε, AsFPathError ε, MonadError ε μ,
-                     HasMaxFiles φ, HasGlobPCRERegex φ, HasAbsDir φ,
-                     HasCompressorMay φ) =>
-                    φ → μ (𝕄 (AbsFile, Compressor), [AbsFile])
-fileCompressClean opts = do
-  let compress    = opts ⊣ compressorMay
-      max_files   = opts ⊣ maxFiles
-  (fes,des,errs) ← glob (opts ⊣ globPCRERegex) (opts ⊣ absDir_)
-  forM_ des $ \ (d,_st) → liftIO $ do
-    stdErrT $ [fmt|Log compress/clean: ignoring globbed directory: %T|] d
-  forM_ errs $ \ (f∷AbsFile,e∷FPathIOError) → liftIO $ do
-    stdErrT $ [fmt|Log compress/clean: failed to read '%T': %T|] f e
-  let fns    ∷ [AbsFile] = sort (fst ⊳ fes) -- the oldest is listed first
-      rms    ∷ [AbsFile] = -- ⊟ 1 to account for the file we're about to write
-        dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
-      cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
-  return (cmprss, rms)
 
 ----------------------------------------
 
