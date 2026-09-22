@@ -215,7 +215,7 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
 
 {- XXX Move this to FPath, create instances for all main types there (incl.
        File, Dir, FPath) -}
-import LogPlus.AbsDir             ( absDir_ )
+import LogPlus.AbsDir             ( HasAbsDir( absDir_ ) )
 import LogPlus.Async              ( HasAsync( waitAsync ) )
 import LogPlus.Compressor         ( Compressor
                                   , HasCompressorMay( compressorMay )
@@ -733,35 +733,6 @@ flusher hgen stvar renderT logit pw messages = do
 
 ------------------------------------------------------------
 
-{-| Provide the name of a file to compress (if any), and a list of older files to
-    purge.  "Old" is determined by filename, which are assumed to be written in
-    a lexical format that makes the oldest file lexically the first (e.g.,
-    "logfile-2026-09-09").
-
-    This doesn't actually perform any destructive IO (just some `stat`s and
-    directory reads); rather it provides a list of instructions.
--}
-
--- XXX how are we checking for which files need compressing?
--- XXX use EMonad and friends?
-fileCompressClean ∷ (MonadIO μ, AsIOError ε, AsFPathError ε, MonadError ε μ) =>
-                    FileTimeRotatorOptions τ
-                  → μ (𝕄 (AbsFile, Compressor), [AbsFile])
-fileCompressClean opts = do
-  let compress    = opts ⊣ compressorMay
-      max_files   = opts ⊣ maxFiles
-  (fes,des,errs) ← glob (opts ⊣ globPCRERegex) (opts ⊣ absDir_)
-  forM_ des $ \ (d,_st) → liftIO $ do
-    stdErrT $ [fmt|Log compress/clean: ignoring globbed directory: %T|] d
-  forM_ errs $ \ (f∷AbsFile,e∷FPathIOError) → liftIO $ do
-    stdErrT $ [fmt|Log compress/clean: failed to read '%T': %T|] f e
-  let fns    ∷ [AbsFile] = sort (fst ⊳ fes) -- the oldest is listed first
-      rms    ∷ [AbsFile] = -- ⊟ 1 to account for the file we're about to write
-        dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
-      cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
-  return (cmprss, rms)
-
-
 ------------------------------------------------------------
 
 -- XXX what happens if we start logging to an extant file?
@@ -957,6 +928,38 @@ fileSizeRotatorTests =
              -}
             )
         ]
+
+----------------------------------------
+
+{-| Provide the name of a file to compress (if any), and a list of older files
+    to purge.  "Old" is determined by filename, which are assumed to be written
+    in a lexical format that makes the oldest file lexically the first (e.g.,
+    "logfile-2026-09-09").
+
+    This doesn't actually perform any destructive IO (just some `stat`s and
+    directory reads); rather it provides a list of instructions.
+-}
+
+-- XXX how are we checking for which files need compressing?
+-- XXX use EMonad and friends?
+fileCompressClean ∷ ∀ ε φ μ .
+                    (MonadIO μ, AsIOError ε, AsFPathError ε, MonadError ε μ,
+                     HasMaxFiles φ, HasGlobPCRERegex φ, HasAbsDir φ,
+                     HasCompressorMay φ) =>
+                    φ → μ (𝕄 (AbsFile, Compressor), [AbsFile])
+fileCompressClean opts = do
+  let compress    = opts ⊣ compressorMay
+      max_files   = opts ⊣ maxFiles
+  (fes,des,errs) ← glob (opts ⊣ globPCRERegex) (opts ⊣ absDir_)
+  forM_ des $ \ (d,_st) → liftIO $ do
+    stdErrT $ [fmt|Log compress/clean: ignoring globbed directory: %T|] d
+  forM_ errs $ \ (f∷AbsFile,e∷FPathIOError) → liftIO $ do
+    stdErrT $ [fmt|Log compress/clean: failed to read '%T': %T|] f e
+  let fns    ∷ [AbsFile] = sort (fst ⊳ fes) -- the oldest is listed first
+      rms    ∷ [AbsFile] = -- ⊟ 1 to account for the file we're about to write
+        dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
+      cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
+  return (cmprss, rms)
 
 ----------------------------------------
 
