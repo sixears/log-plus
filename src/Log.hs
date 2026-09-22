@@ -31,7 +31,6 @@ import Base1T  hiding  ( toList )
 -- XXX factor out rotators to separate modules
 -- XXX move some functions to other modules
 
-import Prelude  ( error {- XXX , undefined -} )
 -- import Debug.Trace  ( traceShow, trace ) -- XXX
 
 -- async -------------------------------
@@ -51,7 +50,6 @@ import Data.List                ( and, reverse, sort, sortOn, zip )
 import Data.List.NonEmpty       ( nonEmpty )
 import Data.Maybe               ( catMaybes, isJust )
 import Data.Monoid              ( Monoid )
-import Data.Tuple               ( uncurry )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( toList ) )
 import GHC.Generics             ( Generic )
@@ -84,8 +82,6 @@ import FStat  ( FStat, size )
 
 -- fpath -------------------------------
 
-import qualified  FPath.File
-
 import FPath                   ( (⫻), stripDirFPE )
 import FPath.AbsDir            ( AbsDir )
 import FPath.AbsFile           ( AbsFile )
@@ -99,8 +95,6 @@ import FPath.RelFile           ( _RelFile_, relfile )
 
 import Control.Lens.Getter     ( view )
 import Control.Lens.Review     ( re )
-import Control.Lens.Setter     ( over )
-import Control.Lens.Traversal  ( both )
 
 -- logging-effect ----------------------
 
@@ -123,7 +117,6 @@ import MonadIO.Directory              ( directoryList, glob
                                       , inDir, listdirStdOut, mkGlobRegex
                                       )
 import MonadIO.File                   ( chmod, rename, unlink )
-import MonadIO.FStat                  ( FExists( FExists ), lfexists )
 import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
                                         handle, hClose, hname )
 import MonadIO.OpenFile               ( FileOpenMode( FileW ), openFile )
@@ -175,7 +168,7 @@ import Prettyprinter.Render.Terminal  ( AnsiStyle )
 
 -- safe --------------------------------
 
-import Safe  ( headDef, lastMay, tailSafe )
+import Safe  ( headDef, lastMay )
 
 -- single ------------------------------
 
@@ -242,10 +235,8 @@ import LogPlus.Compressor         ( Compressor
 import LogPlus.CompressorIO       ( HasCompressorIO( compressorIOF ) )
 import LogPlus.CompressorThread   ( CompressorThread
                                   , HasCompressorThreadMay(compressorThreadMay))
-import LogPlus.EMonad             ( ꙝ, ꙝ' )
-import LogPlus.FilenameExtension  ( HasFilenameExtension( appendExtension
-                                                        , filenameExtensionPC )
-                                  )
+import LogPlus.EMonad             ( ꙝ' )
+import LogPlus.FilenameExtension  ( HasFilenameExtension( filenameExtensionPC ))
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
 import LogPlus.FileSizeRotator    ( fileNumberedMoves )
 import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
@@ -254,7 +245,6 @@ import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState  ( FileTimeRotatorState )
 import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
-import LogPlus.ListPlus           ( takeWhileM )
 import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
                                   , MaxFiles )
 import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ) )
@@ -805,40 +795,6 @@ threadIsRunning x = liftIO $
   in  poll a≫ \ case
     𝓝   → return ThreadIsRunning
     𝓙 _ → return ThreadIsNotRunning
-
-----------------------------------------
-
-{-| List of moves (and potentially compresses) to perform for numbered file
-    rotation; this accounts for actual file existence.  This doesn't actually
-    perform any destructive IO (just some `stat`s); rather provides a list of
-    instructions.
--}
--- XXX how are we checking for which files need compressing?
--- XXX use EMonad and friends?
-{-
-fileNumberedMoves ∷ MonadIO μ => AbsFile → FileSizeRotatorOptions → 𝕄 ℍ
-                               → μ [(AbsFile, AbsFile, 𝕄 Compressor)]
-fileNumberedMoves fn opts ɦ =
-  let compress    = opts ⊣ compressorMay
-      fngen       ∷ AbsFile → 𝕄 MaxFiles → AbsFile -- XXX
-      fngen       = filenameGenerator opts
-      max_files   = opts ⊣ maxFiles
-      fngen' i    = maybe id appendExtension compress $ fngen fn i
-      fn_nums     = 𝓙 ⊳ [0..(max_files-1)] -- -1 because we start at 0
-      fn_pairs    = (over both fngen') ⊳ zip fn_nums (tailSafe fn_nums)
-      abs_hname h =
-        case h ⊣ hname of
-          FPath.File.FileA a → a
-          FPath.File.FileR r →
-            error $ [fmt|relative file in hname: this should never happen %T|] r
-      init_fnpair = (maybe (fngen fn 𝓝) abs_hname ɦ,fngen fn (𝓙 0),compress)
-      -- `proto_moves` is the list of potential files to move, before filtering
-      -- on whether they actually exist
-      -- only compress when making the first archive file
-      proto_moves = init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
-  in  flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
-                                    (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
--}
 
 ----------------------------------------
 

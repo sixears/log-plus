@@ -13,10 +13,8 @@ import Data.Tuple      ( uncurry )
 
 -- fpath -------------------------------
 
-import qualified  FPath.File
-
-import FPath.AbsFile           ( AbsFile )
-import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
+import FPath.AbsFile  ( AbsFile )
+import FPath.File     ( File( FileA, FileR ) )
 
 -- lens --------------------------------
 
@@ -41,7 +39,7 @@ import Safe  ( tailSafe )
 ------------------------------------------------------------
 
 import LogPlus.Compressor              ( Compressor, compressorMay )
-import LogPlus.EMonad                  ( ꙝ, ꙝ' )
+import LogPlus.EMonad                  ( ꙝ )
 import LogPlus.FilenameExtension       ( appendExtension )
 import LogPlus.FilenameGenerator       ( filenameGenerator )
 import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
@@ -70,8 +68,8 @@ fileNumberedMoves fn opts ɦ =
       fn_pairs    = (over both fngen') ⊳ zip fn_nums (tailSafe fn_nums)
       abs_hname h =
         case h ⊣ hname of
-          FPath.File.FileA a → a
-          FPath.File.FileR r →
+          FileA a → a
+          FileR r →
             error $ [fmt|relative file in hname: this should never happen %T|] r
       init_fnpair = (maybe (fngen fn 𝓝) abs_hname ɦ,fngen fn (𝓙 0),compress)
       -- `proto_moves` is the list of potential files to move, before filtering
