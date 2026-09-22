@@ -24,6 +24,7 @@ library
                     , LogPlus.CompressorThread
                     , LogPlus.FilenameExtension
                     , LogPlus.FilenameGenerator
+                    , LogPlus.FileSizeRotator
                     , LogPlus.FileSizeRotatorOptions
                     , LogPlus.FileSizeRotatorState
                     , LogPlus.FileTimeRotatorState

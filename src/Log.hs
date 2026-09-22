@@ -247,12 +247,14 @@ import LogPlus.FilenameExtension  ( HasFilenameExtension( appendExtension
                                                         , filenameExtensionPC )
                                   )
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
+import LogPlus.FileSizeRotator    ( fileNumberedMoves )
 import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
 import LogPlus.FileSizeRotatorState  ( FileSizeRotatorState )
 import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState  ( FileTimeRotatorState )
 import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
+import LogPlus.ListPlus           ( takeWhileM )
 import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles, maxFiles16 )
                                   , MaxFiles )
 import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ) )
@@ -753,13 +755,6 @@ flusher hgen stvar renderT logit pw messages = do
 
 ------------------------------------------------------------
 
--- XXX move this to ... somewhere.
-takeWhileM ∷ Monad η => (α → η 𝔹) → [α] → η [α]
-takeWhileM _ []    = return []
-takeWhileM p (x:xs)= p x ≫ \ b → if b then (x:) ⊳ takeWhileM p xs else return []
-
-----------------------------------------
-
 {-| The first non-𝓝 value in a list, if any -}
 firstJust ∷ [𝕄 α] → 𝕄 α
 firstJust []          = 𝓝
@@ -820,6 +815,7 @@ threadIsRunning x = liftIO $
 -}
 -- XXX how are we checking for which files need compressing?
 -- XXX use EMonad and friends?
+{-
 fileNumberedMoves ∷ MonadIO μ => AbsFile → FileSizeRotatorOptions → 𝕄 ℍ
                                → μ [(AbsFile, AbsFile, 𝕄 Compressor)]
 fileNumberedMoves fn opts ɦ =
@@ -842,6 +838,7 @@ fileNumberedMoves fn opts ɦ =
       proto_moves = init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
   in  flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
                                     (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
+-}
 
 ----------------------------------------
 
@@ -853,6 +850,7 @@ fileNumberedMoves fn opts ɦ =
     This doesn't actually perform any destructive IO (just some `stat`s and
     directory reads); rather it provides a list of instructions.
 -}
+
 -- XXX how are we checking for which files need compressing?
 -- XXX use EMonad and friends?
 fileCompressClean ∷ (MonadIO μ, AsIOError ε, AsFPathError ε, MonadError ε μ) =>
@@ -872,97 +870,6 @@ fileCompressClean opts = do
       cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
   return (cmprss, rms)
 
-------------------------------------------------------------
-
-{- XXX
-
-{-| options for fileTimeRotator -}
-data FileTimeRotatorOptions τ =
-     FileTimeRotatorOptions { -- | How to compress old files, if at all.
-                              --   If not `Nothing`, the IO will be run in
-                              --   its own thread and only one will be run
-                              --   at a time; logging will continue to the
-                              --   open file, even if oversized, until the
-                              --   prior compression has completed.
-                              _ftro_cmprss ∷ 𝕄 Compressor
-                            , -- | Create files with these file
-                              --   permissions. Note that during
-                              --   compression, the perms may be wrong:
-                              --   they are set after compression has
-                              --   completed
-                              _ftro_perms  ∷ FileMode
-                            , -- | Maximum number of files to
-                              --   manage/rotate; the numbers appended will
-                              --   be zero-padded to all be the same length.
-                              --   Note that this number includes the current
-                              --   file being written, so if set to (say) 3,
-                              --   there should never be more than 3 matching
-                              --   files (including the current one).
-                              _ftro_mxfs   ∷ MaxFiles
-                            , -- | file name generator; takes a timestamp or 𝓝
-                              --   for the file to write current logs to
-                              _ftro_fngen  ∷ TimeFilenameGenerator τ
-                            , -- | file name glob (globs only over path
-                              --   components, in the given directory)
-                              _ftro_glob ∷ GlobPCRERegex
-                            , -- | The directory to work in.  This rotator
-                              --   can only use a single directory, due to
-                              --   the globbing.
-                              _ftro_dir ∷ AbsDir
-                            }
-  deriving Show
-
-----------
-
-instance HasCompressorMay (FileTimeRotatorOptions τ) where
-  compressorMay = lens _ftro_cmprss (\ f c → f { _ftro_cmprss = c })
-
-----------
-
-instance HasMaxFiles (FileTimeRotatorOptions τ) where
-  maxFiles = lens _ftro_mxfs (\ f m → f { _ftro_mxfs = m })
-
-----------
-
-instance HasPerms (FileTimeRotatorOptions τ) where
-  perms = lens _ftro_perms (\ f p → f { _ftro_perms = p })
-
-----------
-
-instance FilenameGenerator (FileTimeRotatorOptions τ) (TimeFnGen τ) where
-  filenameGenerator = filenameGenerator ∘ _ftro_fngen
-
-----------
-
-instance HasAbsDir (FileTimeRotatorOptions τ) where
-  absDir_ = lens _ftro_dir (\ o d → o { _ftro_dir = d })
-
-----------
-
-instance HasGlobPCRERegex (FileTimeRotatorOptions τ) where
-  globPCRERegex = lens _ftro_glob (\ o g → o { _ftro_glob = g })
-
-----------
-
-{- A default set of `FileTimeRotatorOptions`, which takes a logfile basename;
-   compresses the files, sets a max time of 100MiB, perms of -rw-r--r--, maxFiles
-   of ten files, and using the `simpleNumberedFilenameGenerator` to append a
-   log number on old files (after a `.`), padded with enough digits to allow for
-   the maximum number of files.
-
- -}
-instance (FormatTime τ, Show τ) => New (FileTimeRotatorOptions τ)
-                                       (AbsDir,GlobPCRERegex)     where
-  new (dir,pcre) = let fngen = dayFilenameGenerator
-                   in  FileTimeRotatorOptions { _ftro_cmprss = 𝓙 compressPzstd
-                                              , _ftro_perms  = 0o644
-                                              , _ftro_mxfs   = new (10 ∷ Word16)
-                                              , _ftro_fngen  = fngen
-                                              , _ftro_glob   = pcre
-                                              , _ftro_dir    = dir
-                                              }
-
--}
 
 ------------------------------------------------------------
 
