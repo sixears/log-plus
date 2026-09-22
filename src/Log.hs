@@ -33,10 +33,6 @@ import Base1T  hiding  ( toList )
 
 -- import Debug.Trace  ( traceShow, trace ) -- XXX
 
--- async -------------------------------
-
-import Control.Concurrent.Async  ( Async, async, poll )
-
 -- base --------------------------------
 
 import qualified  Data.Foldable  as  Foldable
@@ -46,7 +42,7 @@ import Control.Concurrent.MVar  ( MVar, tryReadMVar, newEmptyMVar, newMVar
                                 , readMVar, swapMVar )
 import Data.Bifunctor           ( bimap )
 import Data.Foldable            ( all, concatMap, foldMap )
-import Data.List                ( and, reverse, sort, sortOn, zip )
+import Data.List                ( and, sort, sortOn, zip )
 import Data.List.NonEmpty       ( nonEmpty )
 import Data.Maybe               ( catMaybes, isJust )
 import Data.Monoid              ( Monoid )
@@ -87,7 +83,6 @@ import FPath.AbsDir            ( AbsDir )
 import FPath.AbsFile           ( AbsFile )
 import FPath.Basename          ( basename )
 import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
-import FPath.FileLike          ( (⊙) )
 import FPath.PathComponent     ( PathComponent, pc )
 import FPath.RelFile           ( _RelFile_, relfile )
 
@@ -116,7 +111,7 @@ import MonadError.IO.Error  ( IOError )
 import MonadIO.Directory              ( directoryList, glob
                                       , inDir, listdirStdOut, mkGlobRegex
                                       )
-import MonadIO.File                   ( chmod, rename, unlink )
+import MonadIO.File                   ( unlink )
 import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
                                         handle, hClose, hname )
 import MonadIO.OpenFile               ( FileOpenMode( FileW ), openFile )
@@ -138,9 +133,7 @@ import Control.Monad.Identity  ( runIdentity )
 
 -- natural -----------------------------
 
-import Natural            ( (⊟) )
-import Natural.Length     ( щ )
-import Natural.Unsigned   ( ɨ )
+import Natural  ( (⊟) )
 
 -- parsec-plus -------------------------
 
@@ -207,10 +200,6 @@ import qualified  Text.Printer  as  P
 import Data.Time.Calendar.OrdinalDate  ( fromOrdinalDate )
 import Data.Time.Clock                 ( getCurrentTime )
 
--- unix --------------------------------
-
-import System.Posix.Types  ( FileMode )
-
 ------------------------------------------------------------
 --                     local imports                       -
 ------------------------------------------------------------
@@ -227,20 +216,17 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
 {- XXX Move this to FPath, create instances for all main types there (incl.
        File, Dir, FPath) -}
 import LogPlus.AbsDir             ( absDir_ )
-import LogPlus.Async              ( HasAsync( async_, waitAsync ) )
+import LogPlus.Async              ( HasAsync( waitAsync ) )
 import LogPlus.Compressor         ( Compressor
                                   , HasCompressorMay( compressorMay )
                                   , compressPzstd
                                   )
-import LogPlus.CompressorIO       ( HasCompressorIO( compressorIOF ) )
 import LogPlus.CompressorThread   ( CompressorThread
-                                  , HasCompressorThreadMay(compressorThreadMay))
-import LogPlus.EMonad             ( ꙝ' )
-import LogPlus.FilenameExtension  ( HasFilenameExtension( filenameExtensionPC ))
+                                  , HasCompressorThreadMay(compressorThreadMay)
+                                  , asyncCompressorThread
+                                  )
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
-import LogPlus.FileSizeRotator    ( fileNumberedMoves )
-import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
-import LogPlus.FileSizeRotatorState  ( FileSizeRotatorState )
+import LogPlus.FileSizeRotator    ( fileSizeRotator )
 import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState  ( FileTimeRotatorState )
 import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
@@ -251,8 +237,10 @@ import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ) )
 -- XXX move this to its own module
 import LogPlus.New                ( New( new ) )
 import LogPlus.Perms              ( HasPerms( perms ) )
-import LogPlus.SizeBytes          ( HasSizeBytes( sizeBytes ), SizeBytes )
 import LogPlus.StdErr             ( stdErrT )
+import LogPlus.ThreadIsRunning    ( ThreadIsRunning( ThreadIsRunning
+                                                   , ThreadIsNotRunning )
+                                  , threadIsRunning )
 
 --------------------------------------------------------------------------------
 
@@ -745,59 +733,6 @@ flusher hgen stvar renderT logit pw messages = do
 
 ------------------------------------------------------------
 
-{-| The first non-𝓝 value in a list, if any -}
-firstJust ∷ [𝕄 α] → 𝕄 α
-firstJust []          = 𝓝
-firstJust ((𝓙 x) : _) = 𝓙 x
-firstJust (𝓝 : xs)    = firstJust xs
-
-----------------------------------------
-
-{-| spawn a thread that runs a compressor, and fixes up the file permissions
-    after -}
-asyncCompressorThread ∷ (MonadIO μ, HasCompressorIO δ, HasFilenameExtension δ) =>
-                        δ → FileMode → AbsFile → μ CompressorThread
-asyncCompressorThread c file_perms to = liftIO $
-  let c' ∷ AbsFile → AbsFile → IO ()
-      c' = \ from_ to_ → do (c ⊣ compressorIOF) from_ to_
-                            ж $ chmod @IOError file_perms to_
-      ext = c ⊣ filenameExtensionPC
-  in  new ⊳ async (c' to (to⊙ext))
-
-
-----------------------------------------
-
-{-| Move, and optionally compress, a file.
-
-    Rename `from` to `to`, compressing it with `compress` if that is not
-    `Nothing`. If the compressor is initiated, it is fired off in a separate
-    thread, and the `ThreadId` is returned.  Once the compressor is complete, we
-    `chmod` the resultant file to `file_perms`.  We do not `chmod` the `to` file
-    if there is no compressor.
--}
-mvCompress ∷ FileMode → (AbsFile,AbsFile,𝕄 Compressor) → IO (𝕄 CompressorThread)
-mvCompress file_perms (from,to,do_compress) = do
-  ꙝ' $ rename @IOError from to
-  case do_compress of
-    𝓝   → return 𝓝
-    𝓙 c → 𝓙 ⊳ asyncCompressorThread c file_perms to
-
-------------------------------------------------------------
-
-data ThreadIsRunning = ThreadIsRunning | ThreadIsNotRunning
-  deriving (Eq, Show)
-
-------------------------------------------------------------
-
-threadIsRunning ∷ ∀ δ m . (MonadIO m, HasAsync δ ()) => δ -> m ThreadIsRunning
-threadIsRunning x = liftIO $
-  let a ∷ Async () = x ⊣ async_
-  in  poll a≫ \ case
-    𝓝   → return ThreadIsRunning
-    𝓙 _ → return ThreadIsNotRunning
-
-----------------------------------------
-
 {-| Provide the name of a file to compress (if any), and a list of older files to
     purge.  "Old" is determined by filename, which are assumed to be written in
     a lexical format that makes the oldest file lexically the first (e.g.,
@@ -831,6 +766,7 @@ fileCompressClean opts = do
 
 -- XXX what happens if we start logging to an extant file?
 -- XXX use EMonad and friends?
+{-
 fileSizeRotator ∷ ∀ ω μ . MonadIO μ =>
                   FileSizeRotatorOptions
                 → AbsFile                -- ^ base filename (passed to `fngen`)
@@ -887,6 +823,7 @@ fileSizeRotator opts fn st_ _sds t = do
 
     𝓝   → -- no extant handle, so create one
            mkhandle ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle, new (𝕙',l,ṯ))
+-}
 
 --------------------
 

@@ -38,6 +38,7 @@ library
                     , LogPlus.Perms
                     , LogPlus.Render
                     , LogPlus.SizeBytes
+                    , LogPlus.ThreadIsRunning
                     , LogPlus.TimeFilenameGenerator
                     , LogPlus.UTCTime
                     , T.Log
