@@ -24,6 +24,10 @@ import Control.Monad.Log  ( MonadLog, PureLoggingT, Severity( Informational ) )
 
 import Prettyprinter  ( PageWidth( Unbounded ) )
 
+-- tasty -------------------------------
+
+import Test.Tasty  ( DependencyType( AllSucceed ), dependentTestGroup )
+
 -- tasty-plus --------------------------
 
 import TastyPlus   ( assertListCmp )
@@ -40,6 +44,8 @@ import qualified  Log
 import qualified  Log.LogRenderOpts
 
 import qualified  LogPlus.EMonad
+
+import qualified  LogPlus.T.FileSizeRotator
 
 import Log                ( Log, WithLog, log, logRender' )
 import Log.LogRenderOpts  ( logRenderOpts', renderWithSeverity
@@ -125,8 +131,10 @@ logRenderTests =
 ----------------------------------------
 
 tests ∷ TestTree
-tests = testGroup "Log" [ LogPlus.EMonad.tests, Log.tests
-                        , Log.LogRenderOpts.tests, logRenderTests ]
+-- XXX tests = testGroup "Log" [ LogPlus.EMonad.tests, Log.tests
+tests = dependentTestGroup "Log" AllSucceed [ LogPlus.EMonad.tests, Log.tests
+                        , Log.LogRenderOpts.tests, logRenderTests
+                        , LogPlus.T.FileSizeRotator.tests ]
 
 ----------------------------------------
 

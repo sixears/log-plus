@@ -12,7 +12,8 @@ module Log
   , logIO, logIO', logIOT
   , logIOL, logIOL', logIOLT
   , logRender, logRender'
-  , logToFD', logToFD, logToFile, logToFiles, logToFileHandleNoAdornments
+  , logToFD', logToFD, logToFile, logToFiles, logToFiles'
+  , logToFileHandleNoAdornments
   , logToStderr, logToStderr'
   , stackParses, stdRenderers
   , logFilter, mapLog, mapLogE
@@ -104,8 +105,7 @@ import MonadError.IO.Error  ( IOError )
 
 -- monadio-plus ------------------------
 
-import MonadIO.Directory              ( directoryList, inDir, listdirStdOut
-                                      , mkGlobRegex )
+import MonadIO.Directory              ( directoryList, inDir, mkGlobRegex )
 import MonadIO.File                   ( unlink )
 import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
                                         handle, hClose, hname )
@@ -221,9 +221,7 @@ import LogPlus.FileSizeRotator    ( fileSizeRotator )
 import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState  ( FileTimeRotatorState )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
-import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles )
-                                  , MaxFiles )
-import LogPlus.MaxFileSize        ( HasMaxFileSize( maxFileSize ) )
+import LogPlus.MaxFiles           ( maxFiles )
 -- XXX move this to its own module
 import LogPlus.New                ( New( new ) )
 import LogPlus.Perms              ( HasPerms( perms ) )
@@ -723,201 +721,7 @@ flusher hgen stvar renderT logit pw messages = do
 
 ------------------------------------------------------------
 
-------------------------------------------------------------
-
--- XXX what happens if we start logging to an extant file?
--- XXX use EMonad and friends?
-{-
-fileSizeRotator ∷ ∀ ω μ . MonadIO μ =>
-                  FileSizeRotatorOptions
-                → AbsFile                -- ^ base filename (passed to `fngen`)
-                → 𝕄 FileSizeRotatorState -- ^ incoming state; should be 𝓝 at
-                                         --   first, will be self-managed for
-                                         --   recursion
-                → ω                      -- ^ SimpleDocStream (unused)
-                → 𝕋                      -- ^ rendered text to write (used to
-                                         --   calculate whether to rotate)
-                → μ (Handle, FileSizeRotatorState) -- ^ new handle & state
-
-fileSizeRotator opts fn st_ _sds t = do
-  let st          = st_ ⧏ def
-      l           = new @SizeBytes @Word64 (ɨ $ щ t) -- length of t
-      bytes_would = (st ⊣ sizeBytes) + l
-      -- create a new handle, return a thread reference for the compressor if
-      -- used to compress the old one
-      mkhandle    ∷ μ (ℍ, 𝕄 CompressorThread)
-      mkhandle    = do
-        mv_files ← fileNumberedMoves fn opts (st ⊣ 𝕙May)
-        compressor_thread ← liftIO$ firstJust ⊳ forM (reverse mv_files)
-                                                     (mvCompress $ opts ⊣ perms)
-        let -- open a file, mode 0644, raise if it fails
-            open_file ∷ MonadIO μ => AbsFile → μ ℍ
-            open_file =
-              ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ perms)
-        ẖ ∷ ℍ ← open_file ((filenameGenerator opts) fn (𝓝∷𝕄 MaxFiles))
-        return (ẖ, compressor_thread)
-
-  -- is there a compressor currently running?
-  thread_is_running ← liftIO $ case st ⊣ compressorThreadMay of
-                                 𝓝   → return ThreadIsNotRunning
-                                 𝓙 ŧ → threadIsRunning ŧ
-  case st ⊣ 𝕙May of
-    𝓙 𝕙 → if and [ -- no extant thread
-                   thread_is_running ≠ ThreadIsRunning
-                 , -- we don't want empty files
-                   (st ⊣ sizeBytes) ≠ 0
-                 , -- extant file too big
-                   bytes_would > opts ⊣ maxFileSize ∘ sizeBytes
-                 ]
-          then do -- time to make a new handle
-            hClose 𝕙
-            (𝕙',ṯ) ← mkhandle
-            return (𝕙' ⊣ handle, new (𝕙',l,ṯ))
-          else -- just return the extant handle
-            if and [ thread_is_running ≡ ThreadIsNotRunning
-                   , isJust $ st ⊣ compressorThreadMay ]
-            then -- update bytes written; and dump the thread (it's now done)
-                 return (𝕙 ⊣ handle,st & sizeBytes           ⊢ bytes_would
-                                       & compressorThreadMay ⊢ 𝓝)
-            else -- just update the bytes written
-                 return (𝕙 ⊣ handle,st & sizeBytes ⊢ bytes_would)
-
-    𝓝   → -- no extant handle, so create one
-           mkhandle ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle, new (𝕙',l,ṯ))
--}
-
 --------------------
-
-fileSizeRotatorTests ∷ TestTree
-fileSizeRotatorTests =
-  let nil       = const $ return ()
-      do_log    ∷ 𝕄 Compressor → AbsDir
-                → IO ([(AbsFile, FStat)], [(AbsDir, FStat)],
-                      [(AbsFile, FPathIOError)],
-                      [(AbsDir, FPathIOError)]
-                     )
-      do_log c d  = ж @IOError ∘ inDir d $ do
-        let opts    = (new @_ @MaxFiles 10) & compressorMay ⊢ c
-                                                    & maxFileSize   ⊢ 10
-                                                    & maxFiles      ⊢ 3
-            rot     = fileSizeRotator opts (d ⫻ [relfile|logfile|])
-            bopts   = BatchingOptions { flushMaxDelay = 1
-                                      , blockWhenFull = 𝓣
-                                      , flushMaxQueueSize = 1
-                                      }
-        -- we need to turn off batching here for predictable results
-        logToFiles' (𝓙 bopts) [] [] rot $ mapM_ (warnT @())
-                    [ "deleted??" -- this should get rotated away into the ether
-                    , "123" -- each line gets a '\n' added, so that's four bytes
-                    , "456" -- +4 => 8
-                    , "7"   -- +2 => 10
-                    , "abc" -- 4 bytes: should be a new file
-                    , "defghijkl" -- 10 bytes: should be another new file
-                    , "mnopqrstuvwxyz" -- 15 bytes: should be unbroken
-                    ]
-        directoryList @FPathIOError @FPathIOError def d
-
-  in  dependentTestGroup "simpleSizeRotator" AllSucceed $
-        [ testsWithTempDir'' "no-compression" __tempdir__
-            ((◇ [pc|-|]) ⊳ __progNamePrefix__) (do_log 𝓝) nil nil
-            ([ ("check", const $ assertSuccess "check")
-             , ("no file errors", \ (_,(_,_,efs,_)) →
-                   assertEqual "file errors" [] efs
-               )
-             , ("no directory errors", \ (_,(_,_,_,dfs)) →
-                   assertEqual "directory errors" [] dfs
-               )
-             , ("no subdirectories", \ (d,(_,ds,_,_)) →
-                   assertEqual "directories" [d] (fst ⊳ ds)
-               )
-          -- , ("listdir", \ (d,_)→listdirStdOut def d⪼ assertSuccess "listdir")
-             , ("logfile names", \ (d,(fs,_,_,_)) →
-                   case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
-                     𝓛 e   → assertFailure $ show e
-                     𝓡 fs' → let expect = [ [relfile|logfile|]
-                                           , [relfile|logfile.0|]
-                                           , [relfile|logfile.1|]
-                                           , [relfile|logfile.2|]
-                                           ]
-                             in  assertEqual "files" expect (sort fs')
-               )
-
-             , ("logfile sizes", \ (_,(fs,_,_,_)) → do
-                   let sizes  = sortOn fst $ bimap basename size ⊳ fs
-                       expect = [ ([relfile|logfile|],15)
-                                , ([relfile|logfile.0|],10)
-                                , ([relfile|logfile.1|],4)
-                                , ([relfile|logfile.2|],10)
-                                ]
-                   assertEqual "file sizes" expect sizes
-               )
-             ]
-             {- ◇ ((\ (i∷ℕ,fn∷RelFile) → ("cat " ◇ show i, \ (d,_) → do
-                   ѥ (readFileUTF8Lenient @IOError fn) ≫ \ case
-                     𝓛 e → liftIO $ assertFailure (show e)
-                     𝓡 t → liftIO $ do
-                       putStrLn ("---- " ◇ T.pack (show fn) ◇ "----")
-                       putStrLn t
-                       putStrLn "----"
-                       assertSuccess ("cat" ◇ T.pack (show i))
-               )) ⊳ [ (0,[relfile|logfile.0|])
-                    , (1,[relfile|logfile.1|])
-                    , (2,[relfile|logfile.2|])
-                    ])
-             -}
-            )
-
-        , testsWithTempDir'' "with-compression" __tempdir__
-            ((◇ [pc|-|]) ⊳ __progNamePrefix__) (do_log(𝓙 compressPzstd)) nil nil
-            ([ ("check", const $ assertSuccess "check")
-             , ("no file errors", \ (_,(_,_,efs,_)) →
-                   assertEqual "file errors" [] efs
-               )
-             , ("no directory errors", \ (_,(_,_,_,dfs)) →
-                   assertEqual "directory errors" [] dfs
-               )
-             , ("no subdirectories", \ (d,(_,ds,_,_)) →
-                   assertEqual "directories" [d] (fst ⊳ ds)
-               )
-          -- , ("listdir", \ (d,_)→listdirStdOut def d⪼ assertSuccess "listdir")
-             , ("logfile names", \ (d,(fs,_,_,_)) →
-                   case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
-                     𝓛 e   → assertFailure $ show e
-                     𝓡 fs' → let expect = [ [relfile|logfile|]
-                                           , [relfile|logfile.0.zst|]
-                                           ]
-                             in  assertEqual "files" expect (sort fs')
-               )
-
-             , ("logfile sizes", \ (_,(fs,_,_,_)) → do
-                   let sizes  = sortOn fst $ bimap basename size ⊳ fs
-                       expect = [ -- the 10-byte limit will only effect when
-                                  -- compression is complete, which in practice
-                                  -- won't be untill all the writing is done; so
-                                  -- it all gets piled onto here
-                                  ([relfile|logfile|],39)
-                                  -- although 10 bytes uncompressed, the header
-                                  -- will actually increase the file size
-                                , ([relfile|logfile.0.zst|],35)
-                                ]
-                   assertEqual "file sizes" expect sizes
-               )
-             ]
-             {- ◇ ((\ (i∷ℕ,fn∷RelFile) → ("cat " ◇ show i, \ (d,_) → do
-                   ѥ (readFileUTF8Lenient @IOError fn) ≫ \ case
-                     𝓛 e → liftIO $ assertFailure (show e)
-                     𝓡 t → liftIO $ do
-                       putStrLn ("---- " ◇ T.pack (show fn) ◇ "----")
-                       putStrLn t
-                       putStrLn "----"
-                       assertSuccess ("cat" ◇ T.pack (show i))
-               )) ⊳ [ (0,[relfile|logfile.0|])
-                    , (1,[relfile|logfile.1|])
-                    , (2,[relfile|logfile.2|])
-                    ])
-             -}
-            )
-        ]
 
 ----------------------------------------
 
@@ -1417,13 +1221,13 @@ logToFile cso trx =
 
 {-| run `io`, logging to rotating files -}
 logToFiles' ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, HasCompressorThreadMay σ) =>
-             𝕄 BatchingOptions
-           → [LogR ω]                                               -- ^ trx
-           → [LogTransformer ω]                                     -- ^ ls
-           → (𝕄 σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
-             -- ^ rt (rotator)
-           → LoggingT (Log ω) μ α                                   -- ^ io
-           → μ α
+              𝕄 BatchingOptions
+            → [LogR ω]                                               -- ^ trx
+            → [LogTransformer ω]                                     -- ^ ls
+            → (𝕄 σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
+              -- ^ rt (rotator)
+            → LoggingT (Log ω) μ α                                   -- ^ io
+            → μ α
 logToFiles' opts ls trx rt io = do
  let lro  = logRenderOpts' ls Unbounded
  (r,st) ← logToHandlesNoAdornments rt opts lro trx io
@@ -1534,7 +1338,7 @@ _log1io = do logIO @𝕋 Warning 1 "start"
 
 tests ∷ TestTree
 tests = dependentTestGroup "Log" AllSucceed
-          [ logRender'Tests, fileSizeRotatorTests, fileTimeRotatorTests ]
+          [ logRender'Tests, fileTimeRotatorTests ]
 
 ----------------------------------------
 
