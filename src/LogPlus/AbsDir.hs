@@ -1,3 +1,6 @@
+{- XXX Move this to FPath, create instances for all main types there (incl.
+       File, Dir, FPath) -}
+
 module LogPlus.AbsDir
   ( HasAbsDir( absDir_ ) )
 where

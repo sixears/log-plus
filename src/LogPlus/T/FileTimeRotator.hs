@@ -54,9 +54,10 @@ import Data.Time.Calendar.OrdinalDate  ( fromOrdinalDate )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log                      ( fileTimeRotator_, logToFiles', warnT )
+import Log                      ( logToFiles', warnT )
 
 import LogPlus.Compressor       ( Compressor, compressorMay, compressPzstd )
+import LogPlus.FileTimeRotator  ( fileTimeRotator_ )
 import LogPlus.MaxFiles         ( maxFiles )
 import LogPlus.New              ( new )
 

@@ -1,5 +1,5 @@
 module LogPlus.FileSizeRotator
-  ( fileNumberedMoves, fileSizeRotator )
+  ( fileSizeRotator )
 where
 
 import Base1T
