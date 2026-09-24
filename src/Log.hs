@@ -39,23 +39,15 @@ import qualified  Data.Foldable  as  Foldable
 import Control.Concurrent       ( threadDelay )
 import Control.Concurrent.MVar  ( MVar, tryReadMVar, newEmptyMVar, newMVar
                                 , readMVar, swapMVar )
-import Data.Foldable            ( all, concatMap, foldMap )
-import Data.List                ( zip )
+import Data.Foldable            ( concatMap )
 import Data.List.NonEmpty       ( nonEmpty )
 import Data.Maybe               ( catMaybes )
-import Data.Monoid              ( Monoid )
 import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( toList ) )
-import GHC.Generics             ( Generic )
 import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
-
--- deepseq -----------------------------
-
-import Control.DeepSeq  ( NFData )
 
 -- dlist -------------------------------
 
-import qualified  Data.DList  as  DList
 import Data.DList  ( DList, singleton )
 
 -- exceptions --------------------------
@@ -74,15 +66,9 @@ import Control.Monad.Log  ( BatchingOptions( BatchingOptions
 
 -- mono-traversable --------------------
 
-import Data.MonoTraversable  ( Element
-                             , MonoFoldable( ofoldl', ofoldl1Ex', ofoldr
-                                           , ofoldr1Ex , ofoldMap, olength
-                                           , otoList )
-                             , MonoFunctor( omap )
-                             )
+import Data.MonoTraversable  ( MonoFoldable( otoList ) )
 
 -- mtl ---------------------------------
-
 import Control.Monad.Identity  ( runIdentity )
 
 -- parsec-plus -------------------------
@@ -115,12 +101,11 @@ import Safe  ( headDef )
 
 -- single ------------------------------
 
-import Single( MonoSingle( osingle ), single )
+import Single( MonoSingle( osingle ) )
 
 -- tasty-plus --------------------------
 
-import TastyPlus         ( assertListEq, assertListEqIO)
-import TastyPlus.Equish  ( Equish( (≃) ) )
+import TastyPlus  ( assertListEq, assertListEqIO)
 
 -- terminal-size -----------------------
 
@@ -132,10 +117,6 @@ import Data.Text      qualified as  T
 import Data.Text.Lazy qualified
 
 import Data.Text.IO  ( hPutStr, hPutStrLn )
-
--- text-printer ------------------------
-
-import qualified  Text.Printer  as  P
 
 -- time --------------------------------
 
@@ -158,57 +139,11 @@ import LogPlus.Async              ( HasAsync( waitAsync ) )
 import LogPlus.Compressor         ( HasCompressorMay( compressorMay )
                                   , compressPzstd )
 import LogPlus.CompressorThread   ( HasCompressorThreadMay(compressorThreadMay))
+import LogPlus.Log                ( Log, WithLog, WithLogIO, WithLogIOL
+                                  , mapLog, mapLogE )
+import LogPlus.New                ( New( new ) )
 
 --------------------------------------------------------------------------------
-
-{-| a list of LogEntries -}
-newtype Log ω = Log { unLog ∷ DList (LogEntry ω) }
-  deriving (Eq,Functor,Generic,Monoid,NFData,Semigroup,Show)
-
-{-| `WithLog` adds in the `CallStack` constraint, so that if you declare your
-    function to use this constraint, your function will be included in the
-    logged callstack.  If you do not include the `CallStack` constraint, then
-    the callpoint from within the function lacking the constraint (and anything
-    calling it) will not be shown in the callstack.
- -}
-type WithLog α η = (MonadLog (Log α) η, ?stack ∷ CallStack)
-{-| `WithLog`, but with MonadIO, too -}
-type WithLogIO α μ = (MonadIO μ, MonadLog (Log α) μ, ?stack ∷ CallStack)
-
-type WithLogIOL α μ η = (MonadIO μ, MonadLog (Log α) η, ?stack ∷ CallStack)
-
-type instance Element (Log ω) = LogEntry ω
-
-{- This Foldable instance would give rise to toList being a list of α, i.e., the
-   payload; rather than of LogEntry α; which, therefore, would be a
-   contradiction of IsList.toList -- that will lead to surprises, I don't think
-   it's a good idea.
-
-instance Foldable Log where
-  foldr ∷ ∀ α β . (α → β → β) → β → Log α → β
-  foldr f b (Log ls) = foldr (f ∘ view attrs) b ls
--}
-
-instance MonoFoldable (Log ω) where
-  otoList    (Log dl)     = toList dl
-  ofoldl'    f x (Log dl) = foldl' f x dl
-  ofoldr     f x (Log dl) = foldr  f x dl
-  ofoldMap   f (Log dl)   = foldMap f dl
-  ofoldr1Ex  f (Log dl)   = foldr1 f dl
-  ofoldl1Ex' f (Log dl)   = foldl1 f dl
-
-instance MonoFunctor (Log ω) where
-  omap f (Log dl) = Log (f ⊳ dl)
-
-instance Printable ω => Printable (Log ω) where
-  print = P.text ∘ T.unlines ∘ toList ∘ fmap toText ∘ unLog
-
-instance Equish ω => Equish (Log ω) where
-  l ≃ l' = olength l ≡ olength l'
-         ∧ all (\ (x,x') → x ≃ x') (zip (otoList l) (otoList l'))
-
-instance MonoSingle (Log ω) where
-  osingle w = Log (single w)
 
 ------------------------------------------------------------
 
@@ -224,14 +159,6 @@ instance ToDoc_ (Doc()) where
   toDoc_ = id
 
 ------------------------------------------------------------
-
-instance IsList (Log ω) where
-  type Item (Log ω) = LogEntry ω
-  fromList ∷ [LogEntry ω] → Log ω
-  fromList ls = Log (DList.fromList ls)
-  toList (Log ls) = DList.toList ls
-
-----------------------------------------
 
 {-| `vsep` returns an emptyDoc for an empty list; that results in a blank line.
      We often don't want that; the blank line appears whenever a log was
@@ -257,7 +184,7 @@ logIOL sv p txt = do
   -- deliberate, so that we see where in the code we made the log
   tm ← liftIO getCurrentTime
   return $
-    logMessage ∘ Log ∘ singleton $ logEntry ?stack (𝓙 tm) sv (toDoc_ txt) p
+    logMessage ∘ new ∘ singleton $ logEntry ?stack (𝓙 tm) sv (toDoc_ txt) p
 
 --------------------
 
@@ -271,7 +198,8 @@ logIOL' ∷ ∀ ρ ω μ η . (WithLogIOL ω μ η, ToDoc_ ρ, Default ω) =>
 logIOL' sv txt = do
   tm ← liftIO getCurrentTime
   return $
-    logMessage ∘ Log ∘ singleton $ logEntry ?stack (𝓙 tm) sv (toDoc_ txt) def
+    logMessage ∘ new @(Log ω) @(DList (LogEntry ω)) ∘ singleton $
+      logEntry ?stack (𝓙 tm) sv (toDoc_ txt) def
 
 --------------------
 
@@ -282,7 +210,8 @@ logIOLT ∷ ∀ ω μ η . (WithLogIOL ω μ η, Default ω) => Severity → �
 logIOLT sv txt = do
   tm ← liftIO getCurrentTime
   return $
-    logMessage ∘ Log ∘ singleton $ logEntry ?stack (𝓙 tm) sv (toDoc_ txt) def
+    logMessage ∘ new @(Log ω) @(DList (LogEntry ω)) ∘ singleton $
+      logEntry ?stack (𝓙 tm) sv (toDoc_ txt) def
 
 ----------------------------------------
 
@@ -292,7 +221,7 @@ logIO sv p txt = do
   -- note that callstack starts here, *including* the call to logIO; this is
   -- deliberate, so that we see where in the code we made the log
   tm ← liftIO getCurrentTime
-  logMessage ∘ Log ∘ singleton $ logEntry ?stack (𝓙 tm) sv (toDoc_ txt) p
+  logMessage ∘ new ∘ singleton $ logEntry ?stack (𝓙 tm) sv (toDoc_ txt) p
 
 --------------------
 
@@ -302,7 +231,8 @@ logIO sv p txt = do
 logIO' ∷ ∀ ρ ω μ . (WithLogIO ω μ, ToDoc_ ρ, Default ω) => Severity → ρ → μ ()
 logIO' sv txt = do
   tm ← liftIO getCurrentTime
-  logMessage ∘ Log ∘ singleton $ logEntry ?stack (𝓙 tm) sv (toDoc_ txt) def
+  logMessage ∘ new @(Log ω) @(DList (LogEntry ω)) ∘ singleton $
+      logEntry ?stack (𝓙 tm) sv (toDoc_ txt) def
 
 ----------------------------------------
 
@@ -312,14 +242,15 @@ logIO' sv txt = do
 logIOT ∷ ∀ ω μ . (WithLogIO ω μ, Default ω) => Severity → 𝕋 → μ ()
 logIOT sv txt = do
   tm ← liftIO getCurrentTime
-  logMessage ∘ Log ∘ singleton $ logEntry ?stack (𝓙 tm) sv (toDoc_ txt) def
+  logMessage ∘ new @(Log ω) @(DList (LogEntry ω)) ∘ singleton $
+      logEntry ?stack (𝓙 tm) sv (toDoc_ txt) def
 
 ----------------------------------------
 
 {-| log with no IO, thus no timestamp -}
 log ∷ ∀ ω η ρ . (WithLog ω η, ToDoc_ ρ) => Severity → ω → ρ → η ()
 log sv p txt =
-  logMessage ∘ Log ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) p
+  logMessage ∘ new ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) p
 
 {-| alias for `log`, to avoid clashing with `Prelude.log` -}
 logMsg ∷ ∀ ω η ρ . (WithLog ω η, ToDoc_ ρ) => Severity → ω → ρ → η ()
@@ -330,7 +261,8 @@ logMsg = log
 {-| `log`, with a default value -}
 log' ∷ ∀ ω η ρ . (WithLog ω η, ToDoc_ ρ, Default ω) => Severity → ρ → η ()
 log' sv txt = do
-  logMessage ∘ Log ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) def
+  logMessage ∘ new @(Log ω) @(DList (LogEntry ω)) ∘ singleton $
+    logEntry ?stack 𝓝 sv (toDoc_ txt) def
 
 ----------
 
@@ -343,28 +275,30 @@ logMsg' = log'
 {-| `log`, with input type fixed to Text to avoid having to specify -}
 logT ∷ ∀ ω η . (WithLog ω η) => Severity → ω → 𝕋 → η ()
 logT sv p txt =
-  logMessage ∘ Log ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) p
+  logMessage ∘ new ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) p
 
 ----------
 
 {-| alias for `logT`, for consistency with `logMsg` -}
 logMsgT ∷ ∀ ω η . (WithLog ω η) => Severity → ω → 𝕋 → η ()
 logMsgT sv p txt =
-  logMessage ∘ Log ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) p
+  logMessage ∘ new ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) p
 
 ----------
 
 {-| `log'`, with input type fixed to Text to avoid having to specify -}
 logT' ∷ ∀ ω η . (WithLog ω η, Default ω) => Severity → 𝕋 → η ()
 logT' sv txt =
-  logMessage ∘ Log ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) def
+  logMessage ∘ new @(Log ω) @(DList (LogEntry ω)) ∘ singleton $
+    logEntry ?stack 𝓝 sv (toDoc_ txt) def
 
 ----------
 
 {-| alias for `logT'`, for consistency with `logMsg`. -}
 logMsgT' ∷ ∀ ω η . (WithLog ω η, Default ω) => Severity → 𝕋 → η ()
 logMsgT' sv txt =
-  logMessage ∘ Log ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) def
+  logMessage ∘ new @(Log ω) @(DList (LogEntry ω)) ∘ singleton $
+    logEntry ?stack 𝓝 sv (toDoc_ txt) def
 
 --------------------
 
@@ -981,14 +915,6 @@ logToStderr' annos trx = logToTTY' annos trx stderr
 logToTTYPlain ∷ ∀ ω α μ . (MonadIO μ, MonadMask μ) =>
                 [LogTransformer ω] → Handle → LoggingT (Log ω) μ α → μ α
 logToTTYPlain trx = logToTTY' [] trx
-
-----------------------------------------
-
-mapLog ∷ ∀ α β . ([LogEntry α] → [LogEntry β]) → Log α → Log β
-mapLog f (Log l) = Log ∘ fromList $ f (toList l)
-
-mapLogE ∷ ∀ α β . (LogEntry α → LogEntry β) → Log α → Log β
-mapLogE f = mapLog (fmap f)
 
 --------------------------------------------------------------------------------
 --                                   tests                                    --
