@@ -1,4 +1,4 @@
-module LogPlus.T.FileSizeRotator
+module LogPlus.T.FileTimeRotator
   ( tests )
 where
 
@@ -11,7 +11,7 @@ import Data.List       ( sort, sortOn )
 
 -- fpath -------------------------------
 
-import FPath                   ( (⫻), stripDirFPE )
+import FPath                   ( stripDirFPE )
 import FPath.AbsDir            ( AbsDir )
 import FPath.AbsFile           ( AbsFile )
 import FPath.Basename          ( basename )
@@ -35,7 +35,7 @@ import MonadError.IO.Error  ( IOError )
 
 -- monadio-plus ------------------------
 
-import MonadIO.Directory  ( directoryList, inDir )
+import MonadIO.Directory  ( directoryList, inDir, mkGlobRegex )
 import MonadIO.Temp       ( __progNamePrefix__, __tempdir__, testsWithTempDir'')
 
 -- tasty -------------------------------
@@ -46,22 +46,24 @@ import Test.Tasty  ( DependencyType( AllSucceed ), dependentTestGroup )
 
 import Test.Tasty.HUnit  ( assertEqual, assertFailure )
 
+-- time --------------------------------
+
+import Data.Time.Calendar.OrdinalDate  ( fromOrdinalDate )
+
 ------------------------------------------------------------
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log                      ( logToFiles', warnT )
+import Log                      ( fileTimeRotator_, logToFiles', warnT )
 
 import LogPlus.Compressor       ( Compressor, compressorMay, compressPzstd )
-import LogPlus.FileSizeRotator  ( fileSizeRotator )
-import LogPlus.MaxFiles         ( MaxFiles, maxFiles )
-import LogPlus.MaxFileSize      ( maxFileSize )
+import LogPlus.MaxFiles         ( maxFiles )
 import LogPlus.New              ( new )
 
 --------------------------------------------------------------------------------
 
-fileSizeRotatorTests ∷ TestTree
-fileSizeRotatorTests =
+fileTimeRotatorTests ∷ TestTree
+fileTimeRotatorTests =
   let nil       = const $ return ()
       do_log    ∷ 𝕄 Compressor → AbsDir
                 → IO ([(AbsFile, FStat)], [(AbsDir, FStat)],
@@ -69,27 +71,41 @@ fileSizeRotatorTests =
                       [(AbsDir, FPathIOError)]
                      )
       do_log c d  = ж @IOError ∘ inDir d $ do
-        let opts    = (new @_ @MaxFiles 10) & compressorMay ⊢ c
-                                                    & maxFileSize   ⊢ 10
-                                                    & maxFiles      ⊢ 3
-            rot     = fileSizeRotator opts (d ⫻ [relfile|logfile|])
+        let opts    = let pcre = mkGlobRegex ("logfile-.*"∷𝕊)
+                      in  new (d,pcre) & compressorMay ⊢ c & maxFiles ⊢ 3
+            rot x   =
+              \ st w t → do
+                (h,st') ← fileTimeRotator_ opts ([pc|logfile|])
+                                          (fromOrdinalDate 2026 x) st w t
+                return (h,st')
             bopts   = BatchingOptions { flushMaxDelay = 1
                                       , blockWhenFull = 𝓣
                                       , flushMaxQueueSize = 1
                                       }
         -- we need to turn off batching here for predictable results
-        logToFiles' (𝓙 bopts) [] [] rot $ mapM_ (warnT @())
+        logToFiles' (𝓙 bopts) [] [] (rot 252) $ mapM_ (warnT @())
                     [ "deleted??" -- this should get rotated away into the ether
-                    , "123" -- each line gets a '\n' added, so that's four bytes
-                    , "456" -- +4 => 8
-                    , "7"   -- +2 => 10
-                    , "abc" -- 4 bytes: should be a new file
-                    , "defghijkl" -- 10 bytes: should be another new file
+                    ]
+        logToFiles' (𝓙 bopts) [] [] (rot 253) $ mapM_ (warnT @())
+                    [ "123"
+                    , "456"
+                    , "7"
+                    , "abc"
+                    ]
+        logToFiles' (𝓙 bopts) [] [] (rot 254) $ mapM_ (warnT @())
+                    [ "αβγδεζηθικλ"
+                    , "μνξ"
+                    , "πρσ"
+                    , "τφχ"
+                    ]
+        -- x ≡ 255 → 2026-09-12
+        logToFiles' (𝓙 bopts) [] [] (rot 255) $ mapM_ (warnT @())
+                    [ "defghijkl" -- 10 bytes: should be another new file
                     , "mnopqrstuvwxyz" -- 15 bytes: should be unbroken
                     ]
         directoryList @FPathIOError @FPathIOError def d
 
-  in  dependentTestGroup "simpleSizeRotator" AllSucceed $
+  in  dependentTestGroup "simpleTimeRotator" AllSucceed $
         [ testsWithTempDir'' "no-compression" __tempdir__
             ((◇ [pc|-|]) ⊳ __progNamePrefix__) (do_log 𝓝) nil nil
             ([ ("check", const $ assertSuccess "check")
@@ -106,20 +122,18 @@ fileSizeRotatorTests =
              , ("logfile names", \ (d,(fs,_,_,_)) →
                    case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
                      𝓛 e   → assertFailure $ show e
-                     𝓡 fs' → let expect = [ [relfile|logfile|]
-                                           , [relfile|logfile.0|]
-                                           , [relfile|logfile.1|]
-                                           , [relfile|logfile.2|]
-                                           ]
+                     𝓡 fs' → let expect = [ [relfile|logfile-2026-09-10|]
+                                          , [relfile|logfile-2026-09-11|]
+                                          , [relfile|logfile-2026-09-12|]
+                                          ]
                              in  assertEqual "files" expect (sort fs')
                )
 
              , ("logfile sizes", \ (_,(fs,_,_,_)) → do
                    let sizes  = sortOn fst $ bimap basename size ⊳ fs
-                       expect = [ ([relfile|logfile|],15)
-                                , ([relfile|logfile.0|],10)
-                                , ([relfile|logfile.1|],4)
-                                , ([relfile|logfile.2|],10)
+                       expect = [ ([relfile|logfile-2026-09-10|],14)
+                                , ([relfile|logfile-2026-09-11|],24)
+                                , ([relfile|logfile-2026-09-12|],25)
                                 ]
                    assertEqual "file sizes" expect sizes
                )
@@ -140,7 +154,7 @@ fileSizeRotatorTests =
             )
 
         , testsWithTempDir'' "with-compression" __tempdir__
-            ((◇ [pc|-|]) ⊳ __progNamePrefix__)(do_log(𝓙 compressPzstd)) nil nil
+            ((◇ [pc|-|]) ⊳ __progNamePrefix__) (do_log(𝓙 compressPzstd)) nil nil
             ([ ("check", const $ assertSuccess "check")
              , ("no file errors", \ (_,(_,_,efs,_)) →
                    assertEqual "file errors" [] efs
@@ -151,26 +165,22 @@ fileSizeRotatorTests =
              , ("no subdirectories", \ (d,(_,ds,_,_)) →
                    assertEqual "directories" [d] (fst ⊳ ds)
                )
-          -- , ("listdir", \ (d,_)→listdirStdOut def d⪼assertSuccess "listdir")
+          -- , ("listdir", \ (d,_)→listdirStdOut def d⪼ assertSuccess "listdir")
              , ("logfile names", \ (d,(fs,_,_,_)) →
                    case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
                      𝓛 e   → assertFailure $ show e
-                     𝓡 fs' → let expect = [ [relfile|logfile|]
-                                           , [relfile|logfile.0.zst|]
-                                           ]
+                     𝓡 fs' → let expect = [ [relfile|logfile-2026-09-10.zst|]
+                                          , [relfile|logfile-2026-09-11.zst|]
+                                          , [relfile|logfile-2026-09-12|]
+                                          ]
                              in  assertEqual "files" expect (sort fs')
                )
 
              , ("logfile sizes", \ (_,(fs,_,_,_)) → do
                    let sizes  = sortOn fst $ bimap basename size ⊳ fs
-                       expect = [ -- the 10-byte limit will only effect when
-                                  -- compression is complete, which in practice
-                                  -- won't be untill all the writing is done; so
-                                  -- it all gets piled onto here
-                                  ([relfile|logfile|],39)
-                                  -- although 10 bytes uncompressed, the header
-                                  -- will actually increase the file size
-                                , ([relfile|logfile.0.zst|],35)
+                       expect = [ ([relfile|logfile-2026-09-10.zst|],39)
+                                , ([relfile|logfile-2026-09-11.zst|],49)
+                                , ([relfile|logfile-2026-09-12|],25)
                                 ]
                    assertEqual "file sizes" expect sizes
                )
@@ -194,7 +204,7 @@ fileSizeRotatorTests =
 ----------------------------------------
 
 tests ∷ TestTree
-tests = testGroup "FileSizeRotator" [ fileSizeRotatorTests ]
+tests = testGroup "FileTimeRotator" [ fileTimeRotatorTests ]
 
 ----------------------------------------
 

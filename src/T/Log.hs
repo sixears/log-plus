@@ -46,6 +46,7 @@ import qualified  Log.LogRenderOpts
 import qualified  LogPlus.EMonad
 
 import qualified  LogPlus.T.FileSizeRotator
+import qualified  LogPlus.T.FileTimeRotator
 
 import Log                ( Log, WithLog, log, logRender' )
 import Log.LogRenderOpts  ( logRenderOpts', renderWithSeverity
@@ -131,10 +132,11 @@ logRenderTests =
 ----------------------------------------
 
 tests ∷ TestTree
--- XXX tests = testGroup "Log" [ LogPlus.EMonad.tests, Log.tests
-tests = dependentTestGroup "Log" AllSucceed [ LogPlus.EMonad.tests, Log.tests
-                        , Log.LogRenderOpts.tests, logRenderTests
-                        , LogPlus.T.FileSizeRotator.tests ]
+tests = dependentTestGroup "Log" AllSucceed
+                           [ LogPlus.EMonad.tests, Log.tests
+                           , Log.LogRenderOpts.tests, logRenderTests
+                           , LogPlus.T.FileSizeRotator.tests
+                           , LogPlus.T.FileTimeRotator.tests ]
 
 ----------------------------------------
 

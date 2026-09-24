@@ -17,10 +17,10 @@ module Log
   , logToStderr, logToStderr'
   , stackParses, stdRenderers
   , logFilter, mapLog, mapLogE
-  -- XXX , fileTimeRotator
-  , fileSizeRotator
 
   , HasCompressorMay( compressorMay )
+
+  , fileTimeRotator_
 
   , compressPzstd
   -- tests & test data
@@ -41,9 +41,8 @@ import qualified  Data.Foldable  as  Foldable
 import Control.Concurrent       ( threadDelay )
 import Control.Concurrent.MVar  ( MVar, tryReadMVar, newEmptyMVar, newMVar
                                 , readMVar, swapMVar )
-import Data.Bifunctor           ( bimap )
 import Data.Foldable            ( all, concatMap, foldMap )
-import Data.List                ( and, sort, sortOn, zip )
+import Data.List                ( and, zip )
 import Data.List.NonEmpty       ( nonEmpty )
 import Data.Maybe               ( catMaybes, isJust )
 import Data.Monoid              ( Monoid )
@@ -69,19 +68,14 @@ import Data.DList  ( DList, singleton )
 
 import Control.Monad.Catch  ( MonadMask )
 
--- fstat -------------------------------
-
-import FStat  ( FStat, size )
-
 -- fpath -------------------------------
 
-import FPath                   ( (⫻), stripDirFPE )
-import FPath.AbsDir            ( AbsDir )
+import FPath                   ( (⫻) )
 import FPath.AbsFile           ( AbsFile )
 import FPath.Basename          ( basename )
 import FPath.Error.FPathError  ( FPathIOError )
-import FPath.PathComponent     ( PathComponent, pc )
-import FPath.RelFile           ( _RelFile_, relfile )
+import FPath.PathComponent     ( PathComponent )
+import FPath.RelFile           ( _RelFile_ )
 
 -- lens --------------------------------
 
@@ -105,13 +99,10 @@ import MonadError.IO.Error  ( IOError )
 
 -- monadio-plus ------------------------
 
-import MonadIO.Directory              ( directoryList, inDir, mkGlobRegex )
-import MonadIO.File                   ( unlink )
-import MonadIO.NamedHandle            ( ℍ, HEncoding( NoEncoding ),
-                                        handle, hClose, hname )
-import MonadIO.OpenFile               ( FileOpenMode( FileW ), openFile )
-import MonadIO.Temp                   ( __progNamePrefix__, __tempdir__
-                                      , testsWithTempDir'' )
+import MonadIO.File         ( unlink )
+import MonadIO.NamedHandle  ( ℍ, HEncoding( NoEncoding )
+                            , handle, hClose, hname )
+import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
 
 -- mono-traversable --------------------
 
@@ -158,14 +149,6 @@ import Safe  ( headDef )
 
 import Single( MonoSingle( osingle ), single )
 
--- tasty -------------------------------
-
-import Test.Tasty  ( DependencyType( AllSucceed ), dependentTestGroup )
-
--- tasty-hunit -------------------------
-
-import Test.Tasty.HUnit  ( assertEqual, assertFailure )
-
 -- tasty-plus --------------------------
 
 import TastyPlus         ( assertListEq, assertListEqIO)
@@ -188,8 +171,7 @@ import qualified  Text.Printer  as  P
 
 -- time --------------------------------
 
-import Data.Time.Calendar.OrdinalDate  ( fromOrdinalDate )
-import Data.Time.Clock                 ( getCurrentTime )
+import Data.Time.Clock  ( UTCTime, getCurrentTime )
 
 ------------------------------------------------------------
 --                     local imports                       -
@@ -208,8 +190,7 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
        File, Dir, FPath) -}
 import LogPlus.AbsDir             ( HasAbsDir( absDir_ ) )
 import LogPlus.Async              ( HasAsync( waitAsync ) )
-import LogPlus.Compressor         ( Compressor
-                                  , HasCompressorMay( compressorMay )
+import LogPlus.Compressor         ( HasCompressorMay( compressorMay )
                                   , compressPzstd, fileCompressClean
                                   )
 import LogPlus.CompressorThread   ( CompressorThread
@@ -217,11 +198,9 @@ import LogPlus.CompressorThread   ( CompressorThread
                                   , asyncCompressorThread
                                   )
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
-import LogPlus.FileSizeRotator    ( fileSizeRotator )
 import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState  ( FileTimeRotatorState )
 import LogPlus.ℍMay               ( HasℍMay( 𝕙May ) )
-import LogPlus.MaxFiles           ( maxFiles )
 -- XXX move this to its own module
 import LogPlus.New                ( New( new ) )
 import LogPlus.Perms              ( HasPerms( perms ) )
@@ -816,146 +795,18 @@ fileTimeRotator_ opts pc_ d st_ _sds _t = do
     𝓝   → -- no extant handle, so create one
            mkhandle fn ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle, new (𝕙',ṯ))
 
-----------------------------------------
+--------------------
 
-fileTimeRotatorTests ∷ TestTree
-fileTimeRotatorTests =
-  let nil       = const $ return ()
-      do_log    ∷ 𝕄 Compressor → AbsDir
-                → IO ([(AbsFile, FStat)], [(AbsDir, FStat)],
-                      [(AbsFile, FPathIOError)],
-                      [(AbsDir, FPathIOError)]
-                     )
-      do_log c d  = ж @IOError ∘ inDir d $ do
-        let opts    = let pcre = mkGlobRegex ("logfile-.*"∷𝕊)
-                      in  new (d,pcre) & compressorMay ⊢ c & maxFiles ⊢ 3
-            rot x   =
-              \ st w t → do
-                (h,st') ← fileTimeRotator_ opts ([pc|logfile|])
-                                          (fromOrdinalDate 2026 x) st w t
-                return (h,st')
-            bopts   = BatchingOptions { flushMaxDelay = 1
-                                      , blockWhenFull = 𝓣
-                                      , flushMaxQueueSize = 1
-                                      }
-        -- we need to turn off batching here for predictable results
-        logToFiles' (𝓙 bopts) [] [] (rot 252) $ mapM_ (warnT @())
-                    [ "deleted??" -- this should get rotated away into the ether
-                    ]
-        logToFiles' (𝓙 bopts) [] [] (rot 253) $ mapM_ (warnT @())
-                    [ "123"
-                    , "456"
-                    , "7"
-                    , "abc"
-                    ]
-        logToFiles' (𝓙 bopts) [] [] (rot 254) $ mapM_ (warnT @())
-                    [ "αβγδεζηθικλ"
-                    , "μνξ"
-                    , "πρσ"
-                    , "τφχ"
-                    ]
-        -- x ≡ 255 → 2026-09-12
-        logToFiles' (𝓙 bopts) [] [] (rot 255) $ mapM_ (warnT @())
-                    [ "defghijkl" -- 10 bytes: should be another new file
-                    , "mnopqrstuvwxyz" -- 15 bytes: should be unbroken
-                    ]
-        directoryList @FPathIOError @FPathIOError def d
+fileTimeRotator ∷ MonadIO μ =>
+                  FileTimeRotatorOptions UTCTime
+                → PathComponent
+                → 𝕄 FileTimeRotatorState
+                → ω
+                → 𝕋
+                → μ (Handle, FileTimeRotatorState)
 
-  in  dependentTestGroup "simpleTimeRotator" AllSucceed $
-        [ testsWithTempDir'' "no-compression" __tempdir__
-            ((◇ [pc|-|]) ⊳ __progNamePrefix__) (do_log 𝓝) nil nil
-            ([ ("check", const $ assertSuccess "check")
-             , ("no file errors", \ (_,(_,_,efs,_)) →
-                   assertEqual "file errors" [] efs
-               )
-             , ("no directory errors", \ (_,(_,_,_,dfs)) →
-                   assertEqual "directory errors" [] dfs
-               )
-             , ("no subdirectories", \ (d,(_,ds,_,_)) →
-                   assertEqual "directories" [d] (fst ⊳ ds)
-               )
-          -- , ("listdir", \ (d,_)→listdirStdOut def d⪼assertSuccess "listdir")
-             , ("logfile names", \ (d,(fs,_,_,_)) →
-                   case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
-                     𝓛 e   → assertFailure $ show e
-                     𝓡 fs' → let expect = [ [relfile|logfile-2026-09-10|]
-                                          , [relfile|logfile-2026-09-11|]
-                                          , [relfile|logfile-2026-09-12|]
-                                          ]
-                             in  assertEqual "files" expect (sort fs')
-               )
-
-             , ("logfile sizes", \ (_,(fs,_,_,_)) → do
-                   let sizes  = sortOn fst $ bimap basename size ⊳ fs
-                       expect = [ ([relfile|logfile-2026-09-10|],14)
-                                , ([relfile|logfile-2026-09-11|],24)
-                                , ([relfile|logfile-2026-09-12|],25)
-                                ]
-                   assertEqual "file sizes" expect sizes
-               )
-             ]
-             {- ◇ ((\ (i∷ℕ,fn∷RelFile) → ("cat " ◇ show i, \ (d,_) → do
-                   ѥ (readFileUTF8Lenient @IOError fn) ≫ \ case
-                     𝓛 e → liftIO $ assertFailure (show e)
-                     𝓡 t → liftIO $ do
-                       putStrLn ("---- " ◇ T.pack (show fn) ◇ "----")
-                       putStrLn t
-                       putStrLn "----"
-                       assertSuccess ("cat" ◇ T.pack (show i))
-               )) ⊳ [ (0,[relfile|logfile.0|])
-                    , (1,[relfile|logfile.1|])
-                    , (2,[relfile|logfile.2|])
-                    ])
-             -}
-            )
-
-        , testsWithTempDir'' "with-compression" __tempdir__
-            ((◇ [pc|-|]) ⊳ __progNamePrefix__) (do_log(𝓙 compressPzstd)) nil nil
-            ([ ("check", const $ assertSuccess "check")
-             , ("no file errors", \ (_,(_,_,efs,_)) →
-                   assertEqual "file errors" [] efs
-               )
-             , ("no directory errors", \ (_,(_,_,_,dfs)) →
-                   assertEqual "directory errors" [] dfs
-               )
-             , ("no subdirectories", \ (d,(_,ds,_,_)) →
-                   assertEqual "directories" [d] (fst ⊳ ds)
-               )
-          -- , ("listdir", \ (d,_)→listdirStdOut def d⪼ assertSuccess "listdir")
-             , ("logfile names", \ (d,(fs,_,_,_)) →
-                   case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
-                     𝓛 e   → assertFailure $ show e
-                     𝓡 fs' → let expect = [ [relfile|logfile-2026-09-10.zst|]
-                                          , [relfile|logfile-2026-09-11.zst|]
-                                          , [relfile|logfile-2026-09-12|]
-                                          ]
-                             in  assertEqual "files" expect (sort fs')
-               )
-
-             , ("logfile sizes", \ (_,(fs,_,_,_)) → do
-                   let sizes  = sortOn fst $ bimap basename size ⊳ fs
-                       expect = [ ([relfile|logfile-2026-09-10.zst|],39)
-                                , ([relfile|logfile-2026-09-11.zst|],49)
-                                , ([relfile|logfile-2026-09-12|],25)
-                                ]
-                   assertEqual "file sizes" expect sizes
-               )
-             ]
-             {- ◇ ((\ (i∷ℕ,fn∷RelFile) → ("cat " ◇ show i, \ (d,_) → do
-                   ѥ (readFileUTF8Lenient @IOError fn) ≫ \ case
-                     𝓛 e → liftIO $ assertFailure (show e)
-                     𝓡 t → liftIO $ do
-                       putStrLn ("---- " ◇ T.pack (show fn) ◇ "----")
-                       putStrLn t
-                       putStrLn "----"
-                       assertSuccess ("cat" ◇ T.pack (show i))
-               )) ⊳ [ (0,[relfile|logfile.0|])
-                    , (1,[relfile|logfile.1|])
-                    , (2,[relfile|logfile.2|])
-                    ])
-             -}
-            )
-        ]
+fileTimeRotator o p s w t =
+  liftIO getCurrentTime ≫ \ d → fileTimeRotator_ o p d s w t
 
 ----------------------------------------
 
@@ -1337,8 +1188,7 @@ _log1io = do logIO @𝕋 Warning 1 "start"
 -- tests -----------------------------------------------------------------------
 
 tests ∷ TestTree
-tests = dependentTestGroup "Log" AllSucceed
-          [ logRender'Tests, fileTimeRotatorTests ]
+tests = testGroup "Log" [ logRender'Tests ]
 
 ----------------------------------------
 

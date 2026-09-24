@@ -27,6 +27,7 @@ library
                     , LogPlus.FileSizeRotator
                     , LogPlus.FileSizeRotatorOptions
                     , LogPlus.FileSizeRotatorState
+                    , LogPlus.FileTimeRotator
                     , LogPlus.FileTimeRotatorState
                     , LogPlus.GlobPCRERegex
                     , LogPlus.𝕙May
