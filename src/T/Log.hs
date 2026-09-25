@@ -49,11 +49,13 @@ import qualified  LogPlus.T.FileSizeRotator
 import qualified  LogPlus.T.FileTimeRotator
 import qualified  LogPlus.T.LogRender
 
-import Log                      ( Log, WithLog, log, logRender', logToStderr
-                                , logToTTY, logToTTYPlain )
+import Log                ( Log, WithLog
+                          , log, logToStderr, logToTTY, logToTTYPlain )
+import Log.LogRenderOpts  ( logRenderOpts', renderWithSeverity
+                          , renderWithCallStack )
+
 import LogPlus.CallStackOption  ( CallStackOption( CallStackHead, NoCallStack ) )
-import Log.LogRenderOpts        ( logRenderOpts', renderWithSeverity
-                                , renderWithCallStack )
+import LogPlus.LogRender        ( logRender' )
 
 import LogPlus.T.TestData  ( _log0io )
 

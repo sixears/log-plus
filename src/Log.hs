@@ -10,7 +10,6 @@ module Log
   , log, logMsg, log', logMsg', logT, logMsgT, logT', logMsgT'
   , logIO, logIO', logIOT
   , logIOL, logIOL', logIOLT
-  , logRender, logRender'
   , logToFD', logToFD, logToFile, logToFiles, logToFiles'
   , logToFileHandleNoAdornments
   , logToStderr, logToStderr'
@@ -38,7 +37,6 @@ import qualified  Data.Foldable  as  Foldable
 import Control.Concurrent       ( threadDelay )
 import Control.Concurrent.MVar  ( MVar, tryReadMVar, newEmptyMVar, newMVar
                                 , readMVar, swapMVar )
-import Data.Foldable            ( concatMap )
 import Data.List.NonEmpty       ( nonEmpty )
 import Data.Maybe               ( catMaybes )
 import GHC.Exts                 ( IsList( toList ) )
@@ -56,19 +54,16 @@ import Control.Monad.Catch  ( MonadMask )
 
 import Control.Monad.Log  ( BatchingOptions( BatchingOptions
                                            , blockWhenFull, flushMaxQueueSize )
-                          , Handler, MonadLog, LoggingT, PureLoggingT
-                          , Severity(..)
-                          , flushMaxDelay, logMessage
-                          , runLoggingT, runPureLoggingT, withBatchedHandler
+                          , Handler, MonadLog, LoggingT
+                          , Severity( Critical, Emergency, Error, Alert, Warning
+                                    , Notice, Informational, Debug )
+                          , flushMaxDelay, logMessage, runLoggingT
+                          , withBatchedHandler
                           )
 
 -- mono-traversable --------------------
 
 import Data.MonoTraversable  ( MonoFoldable( otoList ) )
-
--- mtl ---------------------------------
-
-import Control.Monad.Identity  ( runIdentity )
 
 -- prettyprinter -----------------------
 
@@ -86,25 +81,12 @@ import Prettyprinter  ( Doc
 import qualified  Prettyprinter.Render.Terminal  as  RenderTerminal
 import Prettyprinter.Render.Terminal  ( AnsiStyle )
 
--- safe --------------------------------
-
-import Safe  ( headDef )
-
--- single ------------------------------
-
-import Single( MonoSingle( osingle ) )
-
--- tasty-plus --------------------------
-
-import TastyPlus  ( assertListEq, assertListEqIO)
-
 -- terminal-size -----------------------
 
 import qualified  System.Console.Terminal.Size  as  TerminalSize
 
 -- text --------------------------------
 
-import Data.Text      qualified as  T
 import Data.Text.Lazy qualified
 
 import Data.Text.IO  ( hPutStr, hPutStrLn )
@@ -118,11 +100,9 @@ import Data.Time.Clock  ( getCurrentTime )
 ------------------------------------------------------------
 
 import Log.LogEntry          ( LogEntry
-                             , logEntry, logdoc, _le0, _le1, _le2, _le3 )
+                             , logEntry, _le0, _le1, _le2, _le3 )
 import Log.LogRenderOpts     ( LogR, LogRenderOpts
-                             , logRenderOpts', lroOpts, lroRenderer
-                             , lroRenderSevCS, lroRenderTSSevCSH, lroWidth
-                             )
+                             , logRenderOpts', lroRenderer, lroWidth )
 
 import LogPlus.Async              ( HasAsync( waitAsync ) )
 import LogPlus.CallStackOption    ( CallStackOption, stdRenderers)
@@ -131,11 +111,11 @@ import LogPlus.Compressor         ( HasCompressorMay( compressorMay )
 import LogPlus.CompressorThread   ( HasCompressorThreadMay(compressorThreadMay))
 import LogPlus.Log                ( Log, WithLog, WithLogIO, WithLogIOL
                                   , mapLog, mapLogE )
+import LogPlus.LogRender          ( renderMapLog' )
+import LogPlus.LogTransformer     ( LogTransformer )
 import LogPlus.New                ( New( new ) )
 
 --------------------------------------------------------------------------------
-
-------------------------------------------------------------
 
 {-| this is called `ToDoc_` with an underscore to distinguish from any `ToDoc`
     class that took a parameter for the annotation type -}
@@ -147,20 +127,6 @@ instance ToDoc_ 𝕋 where
 
 instance ToDoc_ (Doc()) where
   toDoc_ = id
-
-------------------------------------------------------------
-
-{-| `vsep` returns an emptyDoc for an empty list; that results in a blank line.
-     We often don't want that; the blank line appears whenever a log was
-     filtered; which would really suck for heavily filtered logs (thus
-     discouraging the use of logs for infrequently looked-at things - but then
-     making it awkward to debug irritating edge-cases.  So we define a `vsep`
-     variant, `vsep'`, which declares `Nothing` for empty docs, thus we can
-     completely ignore them (don't call the logger at all).
--}
-vsep' ∷ [Doc α] → 𝕄 (Doc α)
-vsep' [] = 𝓝
-vsep' xs = 𝓙 $ vsep xs
 
 ------------------------------------------------------------
 
@@ -412,12 +378,12 @@ debugT = debug'
 
 ----------------------------------------
 
-type LogTransformer ω = LogEntry ω → [LogEntry ω]
-
 {-| create a log filter from a predicate, for ease of making `LogTransformer`s -}
 logFilter ∷ (LogEntry ω → 𝔹) → LogEntry ω  → [LogEntry ω]
 logFilter p le = if p le then [le] else []
 
+{-
+{- XXX maove this to LogPlus.LogRender -}
 {-| render a log to a list of Docs, per `LogRenderOpts` and applying `LogEntry`
     transformers along the way -}
 renderMapLog ∷ ∀ ω ρ ψ . Foldable ψ =>
@@ -428,6 +394,9 @@ renderMapLog renderer trx ls =
       trx' = foldr (\ a b → concatMap a ∘ b) (:[]) trx
    in renderer ⊳ (toList ls ≫ trx')
 
+--------------------
+
+{- XXX maove this to LogPlus.LogRender -}
 renderMapLog' ∷ ∀ ω ρ ψ . Foldable ψ =>
                 (LogEntry ω → Doc ρ) → ψ (LogTransformer ω) → LogEntry ω
               → 𝕄 (Doc ρ)
@@ -435,6 +404,7 @@ renderMapLog' renderer trx le = vsep' ∘ renderMapLog renderer trx $ osingle le
 
 ----------------------------------------
 
+{- XXX maove this to LogPlus.LogRender -}
 {-| transform a monad ready to return (rather than effect) the logging -}
 logRender ∷ ∀ ω α η .
             Monad η =>
@@ -452,100 +422,15 @@ logRender lro trx a = do
 
 --------------------
 
+{- XXX maove this to LogPlus.LogRender -}
 {-| `logRender` with `()` is sufficiently common to warrant a cheap alias -}
 logRender' ∷ ∀ ω η . Monad η =>
              LogRenderOpts ω → [LogTransformer ω] → PureLoggingT (Log ω) η ()
            → η [𝕋]
 logRender' opts trx lg = snd ⊳ (logRender opts trx lg)
+-}
 
 ----------
-
-logRender'Tests ∷ TestTree
-logRender'Tests =
-  let render o = runIdentity ∘ logRender' o []
-      layoutSimple ∷ Doc ρ → SimpleDocStream ρ
-      layoutSimple = layoutPretty (LayoutOptions Unbounded)
-      docTxt ∷ Doc ρ → 𝕋
-      docTxt = RenderText.renderStrict ∘ layoutSimple
-      msgLen ∷ Doc ρ → Doc ()
-      msgLen d = pretty (T.length $ docTxt d)
-      msgTrim ∷ Doc ρ → Doc () -- trim to one line
-      msgTrim d = pretty (headDef "" ∘ T.lines $ docTxt d)
-      msgLenTransform ∷ LogEntry ρ → [LogEntry ρ]
-      msgLenTransform le = [le & logdoc ⊧ msgLen]
-      msgTrimTransform ∷ LogEntry ρ → [LogEntry ρ]
-      msgTrimTransform le = [le & logdoc ⊧ msgTrim]
-      exp2 ∷ [𝕋]
-      exp2 = [ T.intercalate "\n" [ "[Info] log_entry 1"
-                                  , "  stack0, called at c:1:2 in a:b"
-                                  , "    stack1, called at f:5:6 in d:e"
-                                  ]
-             ]
-      exp3 ∷ [𝕋]
-      exp3 = [ "[1970-01-01Z00:00:00 Thu] [Info] «c#1» log_entry 1"
-             , T.intercalate "\n" [   "[-----------------------] [CRIT] «y#9» "
-                                    ⊕ "multi-line"
-                                  ,   "                                       "
-                                    ⊕ "log"
-                                  ,   "                                       "
-                                    ⊕ "message"
-                                  ]
-             , T.intercalate "\n"
-                             [ "[1970-01-01Z00:00:00 Thu] [Warn] «y#9» this is a"
-                             , "                                               "
-                               ⊕ "vertically aligned"
-                             , "                                               "
-                               ⊕ "           message"
-                             ]
-             , "[-----------------------] [EMRG] «y#9» this is the last message"
-             ]
-      exp4 ∷ [𝕋]
-      exp4 = [ "[1970-01-01Z00:00:00 Thu] [Info] «c#1» 11"
-             , "[-----------------------] [CRIT] «y#9» 22"
-             , "[1970-01-01Z00:00:00 Thu] [Warn] «y#9» 63"
-             , "[-----------------------] [EMRG] «y#9» 24"
-             ]
-      exp5 ∷ [𝕋]
-      exp5 = [ "[1970-01-01Z00:00:00 Thu] [Info] «c#1» log_entry 1"
-             , "[-----------------------] [CRIT] «y#9» multi-line"
-             , "[1970-01-01Z00:00:00 Thu] [Warn] «y#9» this is a"
-             , "[-----------------------] [EMRG] «y#9» this is the last message"
-             ]
-      exp6 ∷ [𝕋]
-      exp6 = [ "[1970-01-01Z00:00:00 Thu] [Info] «c#1» 11"
-             , "[-----------------------] [CRIT] «y#9» 10"
-             , "[1970-01-01Z00:00:00 Thu] [Warn] «y#9» 9"
-             , "[-----------------------] [EMRG] «y#9» 24"
-             ]
-   in testGroup "logRender'" $
-                [ assertListEq "render2" exp2 (render lroRenderSevCS _log0m)
-                , assertListEqIO "render3"
-                                 exp3 (logRender' lroRenderTSSevCSH [] _log1m)
-                , assertListEqIO "drop 'em all"
-                                 []
-                                 (logRender' lroRenderTSSevCSH [\_ → []] _log1m)
-                , assertListEqIO "message length"
-                                 exp4
-                                 (logRender' lroRenderTSSevCSH [msgLenTransform]
-                                             _log1m)
-                , assertListEqIO "message trim"
-                                 exp5
-                                 (logRender' lroRenderTSSevCSH
-                                             [msgTrimTransform]
-                                             _log1m)
-                , assertListEqIO "message trim, then len"
-                                 exp6
-                                 (logRender' lroRenderTSSevCSH
-                                             [msgLenTransform, msgTrimTransform]
-                                             _log1m)
-                , assertListEqIO "message len, then trim"
-                                 exp4
-                                 (logRender' lroRenderTSSevCSH
-                                             [msgTrimTransform, msgLenTransform]
-                                             _log1m)
-                ]
-
-----------------------------------------
 
 whenJust ∷ ∀ α η . Monad η => (α → η ()) → 𝕄 α → η ()
 whenJust _  𝓝  = return ()
@@ -908,7 +793,7 @@ _log1io = do logIO @𝕋 Warning 1 "start"
 -- tests -----------------------------------------------------------------------
 
 tests ∷ TestTree
-tests = testGroup "Log" [ logRender'Tests ]
+tests = testGroup "Log" [ ]
 
 ----------------------------------------
 
