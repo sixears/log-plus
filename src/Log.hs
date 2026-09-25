@@ -41,7 +41,6 @@ import Control.Concurrent.MVar  ( MVar, tryReadMVar, newEmptyMVar, newMVar
 import Data.Foldable            ( concatMap )
 import Data.List.NonEmpty       ( nonEmpty )
 import Data.Maybe               ( catMaybes )
-import GHC.Enum                 ( Enum )
 import GHC.Exts                 ( IsList( toList ) )
 import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
 
@@ -70,14 +69,6 @@ import Data.MonoTraversable  ( MonoFoldable( otoList ) )
 -- mtl ---------------------------------
 
 import Control.Monad.Identity  ( runIdentity )
-
--- parsec-plus -------------------------
-
-import ParsecPlus  ( Parsecable( parser ) )
-
--- parser-plus -------------------------
-
-import ParserPlus  ( caseInsensitiveString, tries )
 
 -- prettyprinter -----------------------
 
@@ -131,13 +122,10 @@ import Log.LogEntry          ( LogEntry, LogEntry
 import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , logRenderOpts', lroOpts, lroRenderer
                              , lroRenderSevCS, lroRenderTSSevCSH, lroWidth
-                             , renderWithCallStack, renderWithSeverity
-                             , renderWithStackHead, renderWithTimestamp
                              )
 
 import LogPlus.Async              ( HasAsync( waitAsync ) )
-import LogPlus.CallStackOption    ( CallStackOption( CallStackHead, NoCallStack )
-                                  , stdRenderers)
+import LogPlus.CallStackOption    ( CallStackOption, stdRenderers)
 import LogPlus.Compressor         ( HasCompressorMay( compressorMay )
                                   , compressPzstd )
 import LogPlus.CompressorThread   ( HasCompressorThreadMay(compressorThreadMay))

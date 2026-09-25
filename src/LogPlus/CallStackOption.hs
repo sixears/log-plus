@@ -1,5 +1,5 @@
 module LogPlus.CallStackOption
-  ( CallStackOption(..), stdRenderers )
+  ( CallStackOption(..), stackParses, stdRenderers )
 where
 
 import Base1T
