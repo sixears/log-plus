@@ -15,6 +15,7 @@ import Base1T
 
 import Control.Monad.Identity  ( runIdentity )
 import Data.Monoid             ( mconcat )
+import System.IO               ( stderr )
 
 -- logging-effect ----------------------
 
@@ -48,9 +49,13 @@ import qualified  LogPlus.EMonad
 import qualified  LogPlus.T.FileSizeRotator
 import qualified  LogPlus.T.FileTimeRotator
 
-import Log                ( Log, WithLog, log, logRender' )
-import Log.LogRenderOpts  ( logRenderOpts', renderWithSeverity
-                          , renderWithCallStack )
+import Log                      ( Log, WithLog, log, logRender', logToStderr
+                                , logToTTY, logToTTYPlain )
+import LogPlus.CallStackOption  ( CallStackOption( CallStackHead, NoCallStack ) )
+import Log.LogRenderOpts        ( logRenderOpts', renderWithSeverity
+                                , renderWithCallStack )
+
+import LogPlus.T.TestData  ( _log0io )
 
 --------------------------------------------------------------------------------
 
@@ -150,5 +155,17 @@ _tests = runTestsP tests
 
 _testr ∷ String → ℕ → IO ExitCode
 _testr = runTestsReplay tests
+
+----------------------------------------
+
+{-| manual tests - run these by hand, there is no automated testing option for
+    these -}
+_testm ∷ IO ()
+_testm = do
+  logToStderr   NoCallStack   []        _log0io
+  logToTTYPlain               [] stderr _log0io
+  logToTTY      NoCallStack   [] stderr _log0io
+  logToTTY      CallStackHead [] stderr _log0io
+  logToTTY      CallStackHead [] stderr _log0io
 
 -- that's all, folks! ----------------------------------------------------------

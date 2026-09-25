@@ -1,5 +1,5 @@
 module LogPlus.T.TestData
-  (  )
+  ( _log0io )
 where
 
 import Base1T
@@ -11,15 +11,17 @@ import Control.Concurrent  ( threadDelay )
 -- logging-effect ----------------------
 
 import Control.Monad.Log  ( MonadLog
-                          , Severity( Critical, Informational, Warning ) )
+                          , Severity( Critical, Informational, Warning )
+                          , logMessage
+                          )
 
 ------------------------------------------------------------
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log  ( logIO, logMessage, logT )
+import Log  ( logIO, logT )
 
-import Log.LogEntry  ( LogEntry, logEntry, logdoc, _le0,_le1,_le2,_le3 )
+import Log.LogEntry  ( _le0,_le1,_le2,_le3 )
 
 import LogPlus.Log  ( Log )
 

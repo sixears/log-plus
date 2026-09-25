@@ -1,6 +1,5 @@
 module Log
-  ( CSOpt(..)
-  , Log, ToDoc_( toDoc_ )
+  ( Log, ToDoc_( toDoc_ )
   , WithLog, WithLogIO
 
   , emergency, alert, critical, err, warn, notice, info, debug
@@ -15,8 +14,8 @@ module Log
   , logToFD', logToFD, logToFile, logToFiles, logToFiles'
   , logToFileHandleNoAdornments
   , logToStderr, logToStderr'
-  , stackParses, stdRenderers
   , logFilter, mapLog, mapLogE
+  , logToTTY, logToTTYPlain
 
   , HasCompressorMay( compressorMay )
 
@@ -69,6 +68,7 @@ import Control.Monad.Log  ( BatchingOptions( BatchingOptions
 import Data.MonoTraversable  ( MonoFoldable( otoList ) )
 
 -- mtl ---------------------------------
+
 import Control.Monad.Identity  ( runIdentity )
 
 -- parsec-plus -------------------------
@@ -136,6 +136,8 @@ import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              )
 
 import LogPlus.Async              ( HasAsync( waitAsync ) )
+import LogPlus.CallStackOption    ( CallStackOption( CallStackHead, NoCallStack )
+                                  , stdRenderers)
 import LogPlus.Compressor         ( HasCompressorMay( compressorMay )
                                   , compressPzstd )
 import LogPlus.CompressorThread   ( HasCompressorThreadMay(compressorThreadMay))
@@ -795,52 +797,12 @@ logToFD' ls trx h io = do
 
 ----------------------------------------
 
-data CSOpt = NoCallStack | CallStackHead | FullCallStack
-  deriving (Enum, Eq, Show)
-
-----------
-
-instance Parsecable CSOpt where
-  parser =
-    -- Lookup table of String to CSOpt; these are the strings that will be parsed
-    -- to CSOpt (with `Parseable`).  Parsing is case-insensitive.
-    let stackOptions ∷ NonEmpty (String,CSOpt)
-        stackOptions =    ("NoCallStack"   , NoCallStack)
-                     :| [ ("NoCS"          , NoCallStack)
-                        , ("CSHead"        , CallStackHead)
-                        , ("CSH"           , CallStackHead)
-                        , ("CallStackHead" , CallStackHead)
-                        , ("FCS"           , FullCallStack)
-                        , ("FullCallStack" , FullCallStack)
-                        , ("FullCS"        , FullCallStack)
-                        , ("CallStack"     , FullCallStack)
-                        , ("Stack"         , FullCallStack)
-                        ]
-    in  tries [ caseInsensitiveString st ⋫ return cso | (st,cso) ← stackOptions ]
-
-----------------------------------------
-
-{-| lookup table of CSOpt to possible (case-insensitive) string representations-}
-stackParses ∷ CSOpt → [String]
-stackParses NoCallStack   = [ "NoCallStack", "NoCS" ]
-stackParses CallStackHead = [ "CallStackHead", "CSHead", "CSH" ]
-stackParses FullCallStack = [ "FullCallStack", "FullCS", "CallStack", "Stack" ]
-
-----------------------------------------
-
-stdRenderers ∷ CSOpt → [LogR ω]
-stdRenderers NoCallStack =
-  [ renderWithTimestamp, renderWithSeverity ]
-stdRenderers CallStackHead =
-  [ renderWithTimestamp, renderWithSeverity, renderWithStackHead ]
-stdRenderers FullCallStack =
-  [ renderWithCallStack, renderWithTimestamp, renderWithSeverity ]
-
 ----------------------------------------
 
 {-| log to a plain file with given callstack choice, and given annotators -}
 logToFile ∷ ∀ ω α μ . (MonadIO μ, MonadMask μ) =>
-            CSOpt → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α → μ α
+            CallStackOption → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α
+          → μ α
 logToFile cso trx =
   logToFileHandleNoAdornments (stdRenderers cso) trx
 
@@ -880,7 +842,8 @@ logToFiles = logToFiles' (𝓙 fileBatchingOptions)
 
 {-| log to a terminal with given callstack choice -}
 logToTTY ∷ ∀ ω α μ . (MonadIO μ, MonadMask μ) =>
-           CSOpt → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α → μ α
+           CallStackOption → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α
+         → μ α
 logToTTY cso trx = logToTTY' (stdRenderers cso) trx
 
 --------------------
@@ -888,7 +851,8 @@ logToTTY cso trx = logToTTY' (stdRenderers cso) trx
 {-| log to a file handle; if it looks like a terminal, use ANSI logging and
     current terminal width; else go unadorned with unbounded width -}
 logToFD ∷ ∀ ω α μ . (MonadIO μ, MonadMask μ) =>
-          CSOpt → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α → μ α
+          CallStackOption → [LogTransformer ω] → Handle → LoggingT (Log ω) μ α
+        → μ α
 logToFD cso trx h io = do
   isatty ← liftIO $ hIsTerminalDevice h
   if isatty
@@ -900,7 +864,7 @@ logToFD cso trx h io = do
 {- | log to stderr, assuming it's a terminal, with given callstack choice &
      filter -}
 logToStderr ∷ ∀ ω α μ . (MonadIO μ, MonadMask μ) =>
-              CSOpt → [LogTransformer ω] → LoggingT (Log ω) μ α → μ α
+              CallStackOption → [LogTransformer ω] → LoggingT (Log ω) μ α → μ α
 logToStderr cso trx = logToTTY cso trx stderr
 
 --------------------
@@ -970,15 +934,5 @@ _tests = runTestsP tests
 
 _testr ∷ String → ℕ → IO ExitCode
 _testr = runTestsReplay tests
-
-{-| manual tests - run these by hand, there is no automated testing option for
-    these -}
-_testm ∷ IO ()
-_testm = do
-  logToStderr   NoCallStack   []        _log0io
-  logToTTYPlain               [] stderr _log0io
-  logToTTY      NoCallStack   [] stderr _log0io
-  logToTTY      CallStackHead [] stderr _log0io
-  logToTTY      CallStackHead [] stderr _log0io
 
 -- that's all, folks! ----------------------------------------------------------

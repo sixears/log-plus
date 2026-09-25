@@ -19,6 +19,7 @@ library
                     , Log.LogEntry
                     , Log.LogRenderOpts
   other-modules:      LogPlus.Async
+                    , LogPlus.CallStackOption
                     , LogPlus.Compressor
                     , LogPlus.CompressorIO
                     , LogPlus.CompressorThread
