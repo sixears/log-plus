@@ -14,7 +14,7 @@ import MonadIO.NamedHandle  ( ℍ )
 
 import LogPlus.CompressorThread  ( CompressorThread
                                  , HasCompressorThreadMay(compressorThreadMay) )
-import LogPlus.ℍMay              ( HasℍMay( 𝕙May ) )
+import LogPlus.HMay              ( HasℍMay( 𝕙May ) )
 import LogPlus.New               ( New( new ) )
 
 --------------------------------------------------------------------------------

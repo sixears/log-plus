@@ -55,7 +55,7 @@ import LogPlus.CompressorThread        ( CompressorThread, asyncCompressorThread
 import LogPlus.FilenameGenerator       ( FilenameGenerator( filenameGenerator ))
 import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState    ( FileTimeRotatorState )
-import LogPlus.ℍMay                    ( 𝕙May )
+import LogPlus.HMay                    ( 𝕙May )
 import LogPlus.New                     ( new )
 import LogPlus.Perms                   ( perms )
 import LogPlus.StdErr                  ( stdErrT )

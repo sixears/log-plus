@@ -30,7 +30,7 @@ library
                     , LogPlus.FileTimeRotator
                     , LogPlus.FileTimeRotatorState
                     , LogPlus.GlobPCRERegex
-                    , LogPlus.𝕙May
+                    , LogPlus.HMay
                     , LogPlus.MaxFiles
                     , LogPlus.MaxFileSize
                     , LogPlus.Name

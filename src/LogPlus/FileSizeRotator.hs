@@ -44,7 +44,7 @@ import LogPlus.CompressorThread        ( CompressorThread, compressorThreadMay
 import LogPlus.FilenameGenerator       ( FilenameGenerator( filenameGenerator ))
 import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
 import LogPlus.FileSizeRotatorState    ( FileSizeRotatorState )
-import LogPlus.ℍMay                    ( 𝕙May )
+import LogPlus.HMay                    ( 𝕙May )
 import LogPlus.ListPlus                ( firstJust )
 import LogPlus.MaxFiles                ( MaxFiles )
 import LogPlus.MaxFileSize             ( maxFileSize )

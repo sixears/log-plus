@@ -1,20 +1,15 @@
-module LogPlus.ℍMay
-  ( HasℍMay(..) )
+module LogPlus.LogTransformer
+  ( LogTransformer )
 where
-
-import Base1T
-
--- monadio-plus ------------------------
-
-import MonadIO.NamedHandle  ( ℍ )
 
 ------------------------------------------------------------
 --                     local imports                      --
 ------------------------------------------------------------
 
+import Log.LogEntry  ( LogEntry )
+
 --------------------------------------------------------------------------------
 
-class    HasℍMay α      where  𝕙May ∷ Lens' α (𝕄 ℍ)
-instance HasℍMay (𝕄 ℍ)  where  𝕙May = lens id (const id)
+type LogTransformer ω = LogEntry ω → [LogEntry ω]
 
 -- that's all, folks! ----------------------------------------------------------
