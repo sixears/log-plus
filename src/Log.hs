@@ -21,7 +21,7 @@ module Log
 
   , compressPzstd
   -- tests & test data
-  , tests, _log0, _log0m, _log1, _log1m )
+  , _log0, _log0m, _log1, _log1m )
 where
 
 import Base1T  hiding  ( toList )
@@ -117,7 +117,7 @@ import Data.Time.Clock  ( getCurrentTime )
 --                     local imports                       -
 ------------------------------------------------------------
 
-import Log.LogEntry          ( LogEntry, LogEntry
+import Log.LogEntry          ( LogEntry
                              , logEntry, logdoc, _le0, _le1, _le2, _le3 )
 import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , logRenderOpts', lroOpts, lroRenderer

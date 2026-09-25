@@ -41,13 +41,13 @@ import Data.Text  ( isPrefixOf, lines, replicate )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import qualified  Log
 import qualified  Log.LogRenderOpts
 
 import qualified  LogPlus.EMonad
 
 import qualified  LogPlus.T.FileSizeRotator
 import qualified  LogPlus.T.FileTimeRotator
+import qualified  LogPlus.T.LogRender
 
 import Log                      ( Log, WithLog, log, logRender', logToStderr
                                 , logToTTY, logToTTYPlain )
@@ -138,8 +138,9 @@ logRenderTests =
 
 tests ∷ TestTree
 tests = dependentTestGroup "Log" AllSucceed
-                           [ LogPlus.EMonad.tests, Log.tests
+                           [ LogPlus.EMonad.tests
                            , Log.LogRenderOpts.tests, logRenderTests
+                           , LogPlus.T.LogRender.tests
                            , LogPlus.T.FileSizeRotator.tests
                            , LogPlus.T.FileTimeRotator.tests ]
 

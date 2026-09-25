@@ -1,5 +1,5 @@
 module LogPlus.T.TestData
-  ( _log0io )
+  ( _log0io, _log0m, _log1m )
 where
 
 import Base1T

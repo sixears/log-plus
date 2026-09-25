@@ -4,9 +4,38 @@ where
 
 import Base1T
 
+-- mtl ---------------------------------
+
+import Control.Monad.Identity  ( runIdentity )
+
+-- prettyprinter -----------------------
+
+import qualified  Prettyprinter.Render.Text  as  RenderText
+
+import Prettyprinter  ( Doc, LayoutOptions( LayoutOptions ), PageWidth(Unbounded)
+                      , SimpleDocStream, layoutPretty, pretty )
+
+-- safe --------------------------------
+
+import Safe  ( headDef )
+
+-- tasty-plus --------------------------
+
+import TastyPlus  ( assertListEq, assertListEqIO )
+
+-- text --------------------------------
+
+import Data.Text  qualified as  T
+
 ------------------------------------------------------------
 --                     local imports                      --
 ------------------------------------------------------------
+
+import Log.LogEntry       ( LogEntry, logdoc )
+import Log.LogRenderOpts  ( lroRenderSevCS, lroRenderTSSevCSH )
+
+import LogPlus.LogRender   ( logRender' )
+import LogPlus.T.TestData  ( _log0m, _log1m )
 
 --------------------------------------------------------------------------------
 
@@ -98,7 +127,7 @@ logRender'Tests =
 -- tests -----------------------------------------------------------------------
 
 tests ∷ TestTree
-tests = testGroup "Log" [ {- XXX logRender'Tests -} ]
+tests = testGroup "LogRender" [ logRender'Tests ]
 
 ----------------------------------------
 
