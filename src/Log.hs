@@ -19,8 +19,7 @@ module Log
   , HasCompressorMay( compressorMay )
 
   , compressPzstd
-  -- tests & test data
-  , _log0, _log0m, _log1, _log1m )
+  )
 where
 
 import Base1T  hiding  ( toList )
@@ -34,7 +33,6 @@ import Base1T  hiding  ( toList )
 
 import qualified  Data.Foldable  as  Foldable
 
-import Control.Concurrent       ( threadDelay )
 import Control.Concurrent.MVar  ( MVar, tryReadMVar, newEmptyMVar, newMVar
                                 , readMVar, swapMVar )
 import Data.List.NonEmpty       ( nonEmpty )
@@ -54,7 +52,7 @@ import Control.Monad.Catch  ( MonadMask )
 
 import Control.Monad.Log  ( BatchingOptions( BatchingOptions
                                            , blockWhenFull, flushMaxQueueSize )
-                          , Handler, MonadLog, LoggingT
+                          , Handler, LoggingT
                           , Severity( Critical, Emergency, Error, Alert, Warning
                                     , Notice, Informational, Debug )
                           , flushMaxDelay, logMessage, runLoggingT
@@ -99,8 +97,7 @@ import Data.Time.Clock  ( getCurrentTime )
 --                     local imports                       -
 ------------------------------------------------------------
 
-import Log.LogEntry          ( LogEntry
-                             , logEntry, _le0, _le1, _le2, _le3 )
+import Log.LogEntry          ( LogEntry, logEntry )
 import Log.LogRenderOpts     ( LogR, LogRenderOpts
                              , logRenderOpts', lroRenderer, lroWidth )
 
@@ -752,60 +749,5 @@ logToStderr' annos trx = logToTTY' annos trx stderr
 logToTTYPlain ∷ ∀ ω α μ . (MonadIO μ, MonadMask μ) =>
                 [LogTransformer ω] → Handle → LoggingT (Log ω) μ α → μ α
 logToTTYPlain trx = logToTTY' [] trx
-
---------------------------------------------------------------------------------
---                                   tests                                    --
---------------------------------------------------------------------------------
-
--- test data ---------------------------
-
-_log0 ∷ Log ()
-_log0 = fromList [_le0]
-
-_log0m ∷ MonadLog (Log ()) η => η ()
-_log0m = logMessage _log0
-
-_log1 ∷ Log ()
-_log1 = fromList [ _le0, _le1, _le2, _le3 ]
-
-_log1m ∷ MonadLog (Log ()) η => η ()
-_log1m = logMessage _log1
-
-_log2 ∷ MonadLog (Log ℕ) η => η ()
-_log2 = do logT Warning       1 "start"
-           logT Informational 3 "middle"
-           logT Critical      2 "end"
-
-_log0io ∷ (MonadIO μ, MonadLog (Log ℕ) μ) => μ ()
-_log0io = do logIO @𝕋 Warning 1 "start"
-             liftIO $ threadDelay 1_000_000
-             logIO @𝕋 Informational 3 "middle"
-             liftIO $ threadDelay 1_000_000
-             logIO @𝕋 Critical 2 "end"
-
-_log1io ∷ (MonadIO μ, MonadLog (Log ℕ) μ) => μ ()
-_log1io = do logIO @𝕋 Warning 1 "start"
-             liftIO $ threadDelay 1_000_000
-             logIO @𝕋 Informational 3 "you shouldn't see this"
-             liftIO $ threadDelay 1_000_000
-             logIO @𝕋 Critical 2 "end"
-
--- tests -----------------------------------------------------------------------
-
-tests ∷ TestTree
-tests = testGroup "Log" [ ]
-
-----------------------------------------
-
-_test ∷ IO ExitCode
-_test = runTestTree tests
-
---------------------
-
-_tests ∷ String → IO ExitCode
-_tests = runTestsP tests
-
-_testr ∷ String → ℕ → IO ExitCode
-_testr = runTestsReplay tests
 
 -- that's all, folks! ----------------------------------------------------------
