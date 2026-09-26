@@ -4,9 +4,14 @@ where
 
 import Base1T
 
--- mtl ---------------------------------
+-- base --------------------------------
 
 import Control.Monad.Identity  ( runIdentity )
+import Data.Monoid             ( mconcat )
+
+-- logging-effect ----------------------
+
+import Control.Monad.Log  ( MonadLog, PureLoggingT, Severity( Informational ) )
 
 -- prettyprinter -----------------------
 
@@ -21,7 +26,7 @@ import Safe  ( headDef )
 
 -- tasty-plus --------------------------
 
-import TastyPlus  ( assertListEq, assertListEqIO )
+import TastyPlus  ( assertListCmp, assertListEq, assertListEqIO )
 
 -- text --------------------------------
 
@@ -31,13 +36,93 @@ import Data.Text  qualified as  T
 --                     local imports                      --
 ------------------------------------------------------------
 
+import Log                ( Log, WithLog, log )
 import Log.LogEntry       ( LogEntry, logdoc )
-import Log.LogRenderOpts  ( lroRenderSevCS, lroRenderTSSevCSH )
+import Log.LogRenderOpts  ( logRenderOpts', lroRenderSevCS, lroRenderTSSevCSH
+                          , renderWithCallStack, renderWithSeverity )
 
 import LogPlus.LogRender   ( logRender' )
 import LogPlus.T.TestData  ( _log0m, _log1m )
 
 --------------------------------------------------------------------------------
+
+{- | Log some text (at Informational severity); should produce at least 3 stack
+     frames -}
+_sf_plus_3 ∷ WithLog () η ⇒ 𝕋 → η ()
+_sf_plus_3 t = let -- add an additional callstack to test the formatting
+                   _sf_plus_2 ∷ WithLog () η ⇒ η ()
+                   _sf_plus_2 = log Informational () t
+                in _sf_plus_2
+
+_3sf ∷ MonadLog (Log ()) η ⇒ 𝕄 𝕋 → η ()
+_3sf Nothing  = _sf_plus_3 "3 stack frames"
+_3sf (Just t) = _sf_plus_3 t
+
+_3sf' ∷ WithLog () η ⇒ η ()
+_3sf' = _3sf (Just "3 frames of stack")
+
+_4sf ∷ WithLog () η ⇒ 𝕄 𝕋 → η ()
+_4sf Nothing  = _sf_plus_3 "4 stack frames"
+_4sf (Just t) = _sf_plus_3 t
+
+-- don't inline this, as then it would disappear from the callstack and screw up
+-- our testing
+{-# NOINLINE _4sf' #-}
+_4sf' ∷ MonadLog (Log ()) η ⇒ η ()
+_4sf' = _4sf (Just "4 stack frames")
+
+-- don't inline this, as then it would disappear from the callstack and screw up
+-- our testing
+{-# NOINLINE _5sf #-}
+_5sf ∷ WithLog () η ⇒ η ()
+_5sf = _4sf (Just "5+ stack frames")
+
+----------------------------------------
+
+logRenderTests ∷ TestTree
+logRenderTests =
+  let indent n t         = T.replicate n " " ⊕ t
+      indents' _ []      = []
+      indents' n (t:ts)  = t:(indent n ⊳ ts)
+      exp3sf'            =
+        indents' 9 [ "[Info] 3 frames of stack"
+                   , "log, called at src/LogPlus/T/LogRender.hs:"
+                   , "  _sf_plus_2, called at src/LogPlus/T/LogRender.hs:"
+                   , "  _sf_plus_3, called at src/LogPlus/T/LogRender.hs:"
+                   ]
+      exp4sf'            =
+        indents' 9 [ "[Info] 4 stack frames"
+                   , "log, called at src/LogPlus/T/LogRender.hs:"
+                   , "  _sf_plus_2, called at src/LogPlus/T/LogRender.hs:"
+                   , "  _sf_plus_3, called at src/LogPlus/T/LogRender.hs:"
+                   , "  _4sf, called at src/LogPlus/T/LogRender.hs:"
+                   ]
+      exp5sf             =
+        indents' 9 [ "[Info] 5+ stack frames"
+                   , "log, called at src/LogPlus/T/LogRender.hs:"
+                   , "  _sf_plus_2, called at src/LogPlus/T/LogRender.hs:"
+                   , "  _sf_plus_3, called at src/LogPlus/T/LogRender.hs:"
+                   , "  _4sf, called at src/LogPlus/T/LogRender.hs:"
+                   , "  _5sf, called at src/LogPlus/T/LogRender.hs:"
+                   ]
+      renderers          = [ renderWithSeverity, renderWithCallStack ]
+      lrOpts             = logRenderOpts' renderers Unbounded
+      render             ∷ Monad η ⇒ PureLoggingT (Log ()) η () → η [𝕋]
+      render             = logRender' lrOpts []
+      renderL            ∷ PureLoggingT (Log ()) Identity () → [𝕋]
+      renderL            = mconcat ∘ fmap T.lines ∘ runIdentity ∘ render
+      assertListPrefices ∷ 𝕋 → [𝕋] → [𝕋] → TestTree
+      assertListPrefices = assertListCmp toText toText T.isPrefixOf
+      check ∷ 𝕋 → [𝕋] → PureLoggingT (Log ()) Identity () → TestTree
+      check name exp got = assertListPrefices name exp (renderL got)
+
+   in testGroup "logRender"
+                [ check "_3sf'" exp3sf' _3sf'
+                , check "_4sf'" exp4sf' _4sf'
+                , check "_5sf" exp5sf _5sf
+                ]
+
+----------------------------------------
 
 logRender'Tests ∷ TestTree
 logRender'Tests =
@@ -127,7 +212,8 @@ logRender'Tests =
 -- tests -----------------------------------------------------------------------
 
 tests ∷ TestTree
-tests = testGroup "LogRender" [ logRender'Tests ]
+-- XXX tests = dependentTestGroup "LogRender" AllSucceed [ logRenderTests, logRender'Tests ]
+tests = testGroup "LogRender" [ logRenderTests, logRender'Tests ]
 
 ----------------------------------------
 
