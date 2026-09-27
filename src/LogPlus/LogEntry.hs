@@ -1,6 +1,6 @@
 module LogPlus.LogEntry
-  ( LogEntry, attrs, logdoc, logEntry, mapDoc, mapPrefixDoc, prefix, simpleDoc
-  , _le0, _le1, _le2, _le3, _le4n, _le5n )
+  ( LogEntry, attrs, logdoc, logEntry, logEntryNoCS, mapDoc, mapPrefixDoc
+  , prefix, simpleDoc )
 where
 
 import Base1T

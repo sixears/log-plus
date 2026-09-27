@@ -1,5 +1,5 @@
 module LogPlus.T.TestData
-  ( _log0io, _log0m, _log1m )
+  ( _le0, _le1, _le2, _le3, _le4n, _le5n, _log0io, _log0m, _log1m )
 where
 
 import Base1T
@@ -7,13 +7,27 @@ import Base1T
 -- base --------------------------------
 
 import Control.Concurrent  ( threadDelay )
+import GHC.Stack           ( SrcLoc( SrcLoc ), fromCallSiteList )
 
 -- logging-effect ----------------------
 
 import Control.Monad.Log  ( MonadLog
-                          , Severity( Critical, Informational, Warning )
+                          , Severity( Emergency,Critical,Informational,Warning )
                           , logMessage
                           )
+
+-- more-unicode ------------------------
+
+import Data.MoreUnicode.Doc  ( (⊞) )
+
+-- prettyprinter -----------------------
+
+import Prettyprinter  ( align, pretty, vsep )
+
+-- time --------------------------------
+
+import Data.Time.Calendar  ( fromGregorian )
+import Data.Time.Clock     ( UTCTime( UTCTime ), secondsToDiffTime )
 
 ------------------------------------------------------------
 --                     local imports                      --
@@ -21,9 +35,51 @@ import Control.Monad.Log  ( MonadLog
 
 import LogPlus           ( logIO, logT )
 import LogPlus.Log       ( Log )
-import LogPlus.LogEntry  ( _le0,_le1,_le2,_le3 )
+import LogPlus.LogEntry  ( LogEntry, logEntry, logEntryNoCS )
 
 --------------------------------------------------------------------------------
+
+_cs0 ∷ CallStack
+_cs0 = fromCallSiteList []
+
+_cs1 ∷ CallStack
+_cs1 = fromCallSiteList [ ("stack0", SrcLoc "z" "x" "y" 9 8 7 6) ]
+
+_cs2 ∷ CallStack
+_cs2 = fromCallSiteList [ ("stack0", SrcLoc "a" "b" "c" 1 2 3 4)
+                        , ("stack1", SrcLoc "d" "e" "f" 5 6 7 8) ]
+
+_tm ∷ UTCTime
+_tm = UTCTime (fromGregorian 1970 1 1) (secondsToDiffTime 0)
+
+_le0 ∷ LogEntry ()
+_le0 = logEntry _cs2 (Just _tm) Informational (pretty ("log_entry 1" ∷ 𝕋)) ()
+
+_le1 ∷ LogEntry ()
+_le1 =
+  logEntry _cs1 Nothing Critical (pretty ("multi-line\nlog\nmessage" ∷ 𝕋)) ()
+
+_le2 ∷ LogEntry ()
+_le2 =
+  let valign = align ∘ vsep
+      msg    = "this is" ⊞ valign [ "a"
+                                  , "vertically"
+                                    ⊞ valign [ "aligned"
+                                             , "message"
+                                             ]
+                                  ]
+   in logEntry _cs1 (Just _tm) Warning msg ()
+_le3 ∷ LogEntry ()
+_le3 =
+  logEntry _cs1 Nothing Emergency (pretty ("this is the last message" ∷𝕋)) ()
+
+_le4n ∷ LogEntry ℕ
+_le4n = logEntryNoCS Nothing Warning  (pretty ("start" ∷ 𝕋)) 1
+
+_le5n ∷ LogEntry ℕ
+_le5n = logEntryNoCS Nothing Critical (pretty ("end" ∷ 𝕋)) 2
+
+----------------------------------------
 
 _log0 ∷ Log ()
 _log0 = fromList [_le0]
