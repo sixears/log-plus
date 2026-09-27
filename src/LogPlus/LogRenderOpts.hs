@@ -3,75 +3,52 @@ module LogPlus.LogRenderOpts
 
   , logRenderOpts'
 
-  , lroOpts, lroRenderPlain, lroRenderSevCS, lroRenderSevCSH
+  , lroOpts, lroRenderPlain, lroRenderSev, lroRenderSevCS, lroRenderSevCSH
   , lroRenderTSSev, lroRenderTSSevCS, lroRenderTSSevCSH
   , lroRenderer, lroWidth
 
+  , renderLogWithCallStack
+  , renderLogWithSeverity
+  , renderLogWithSeverityAndTimestamp
+  , renderLogWithStackHead
+  , renderLogWithTimestamp
+
   , renderWithCallStack, renderWithSeverity, renderWithStackHead
   , renderWithTimestamp
-
-  , tests
   )
 where
 
 import Base1T
 
--- base --------------------------------
-
-import Data.Type.Equality  ( type(~) )
-import GHC.Stack           ( SrcLoc )
-import System.IO           ( Handle, stdout )
-
 -- lens --------------------------------
 
 import Control.Lens  ( view )
 
--- logging-effect ----------------------
-
-import Control.Monad.Log  ( Severity( Alert, Debug, Critical, Emergency, Error
-                                    , Informational, Notice, Warning ) )
-
 -- mono-traversable --------------------
 
-import Data.MonoTraversable  ( Element, MonoFoldable( otoList )
-                             , MonoFunctor( omap ) )
+import Data.MonoTraversable  ( Element, MonoFunctor( omap ) )
 
 -- prettyprinter -----------------------
 
 import Prettyprinter              ( Doc, LayoutOptions( LayoutOptions )
                                   , PageWidth( Unbounded )
-                                  , defaultLayoutOptions, layoutPageWidth
-                                  , layoutPretty, line, pretty, reAnnotate, vsep
+                                  , layoutPageWidth, reAnnotate
                                   )
-import Prettyprinter.Render.Text  ( renderStrict )
 
 -- prettyprinter-ansi-terminal ---------
 
-
-import qualified  Prettyprinter.Render.Terminal  as  Terminal
 import Prettyprinter.Render.Terminal  ( AnsiStyle )
-
--- tasty-plus --------------------------
-
-import TastyPlus  ( (≟), assertListEq )
-
--- text --------------------------------
-
-import qualified  Data.Text  as  T
-
-import Data.Text  ( Text )
 
 ------------------------------------------------------------
 --                     Local Imports                      --
 ------------------------------------------------------------
 
-import LogPlus.LogEntry    ( LogEntry , logdoc, logEntry )
+import LogPlus.LogEntry    ( LogEntry , logdoc )
 import LogPlus.Render      ( renderWithCallStack, renderWithSeverity
                            , renderWithSeverityAndTimestamp
                            , renderWithSeverityAnsi, renderWithStackHead
                            , renderWithTimestamp
                            )
-import LogPlus.T.TestData  ( _le0 )
 
 --------------------------------------------------------------------------------
 
@@ -210,25 +187,5 @@ renderLogWithCallStack = renderWithCallStack
 
 renderLogWithSeverityAndTimestamp ∷ LogR ω
 renderLogWithSeverityAndTimestamp = renderWithSeverityAndTimestamp
-
---------------------
-
-renderLogEntries ∷ (MonoFoldable χ, Element χ ~ LogEntry ω) ⇒
-                       LogRenderOpts ω → χ → Doc AnsiStyle
-renderLogEntries opts = (⊕ line) ∘ (vsep ∘ fmap (lroRenderer opts) ∘ otoList)
-
-renderIO ∷ (MonadIO μ, MonoFoldable χ, Element χ ~ LogEntry ω) ⇒
-           Handle → LogRenderOpts ω → χ → μ ()
-renderIO h o =
-  liftIO ∘ Terminal.renderIO h ∘ layoutPretty (o ⊣ lroOpts) ∘ renderLogEntries o
-
-{-| Test ANSI rendering; designed to run just to stderr, rather than within
-    a Tasty test harness -}
-ansiTests ∷ IO ()
-ansiTests = let mkle sev = logEntry @[(String,SrcLoc)] @()
-                                    [] Nothing sev (pretty $ show sev) ()
-                logs = mkle ⊳ [ Emergency, Alert, Critical, Error, Warning
-                              , Notice, Informational, Debug ]
-             in renderIO stdout lroRenderSev logs
 
 -- that's all, folks! ----------------------------------------------------------

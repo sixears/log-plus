@@ -49,7 +49,9 @@ library
                     , LogPlus.TimeFilenameGenerator
                     , LogPlus.ToDoc_
                     , LogPlus.UTCTime
+
                     , T.LogPlus
+                    , LogPlus.T.LogRenderOpts
   default-extensions: ConstraintKinds
                     , DeriveFunctor
                     , DeriveGeneric
