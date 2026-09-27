@@ -49,13 +49,10 @@ import Control.Monad.Catch  ( MonadMask )
 
 -- logging-effect ----------------------
 
-import Control.Monad.Log  ( BatchingOptions( BatchingOptions
-                                           , blockWhenFull, flushMaxQueueSize )
-                          , Handler, LoggingT
+import Control.Monad.Log  ( BatchingOptions, Handler, LoggingT
                           , Severity( Critical, Emergency, Error, Alert, Warning
                                     , Notice, Informational, Debug )
-                          , flushMaxDelay, logMessage, runLoggingT
-                          , withBatchedHandler
+                          , logMessage, runLoggingT, withBatchedHandler
                           )
 
 -- mono-traversable --------------------
@@ -105,6 +102,7 @@ import LogPlus.CallStackOption    ( CallStackOption, stdRenderers)
 import LogPlus.Compressor         ( HasCompressorMay( compressorMay )
                                   , compressPzstd )
 import LogPlus.CompressorThread   ( HasCompressorThreadMay(compressorThreadMay))
+import LogPlus.BatchingOptions    ( fileBatchingOptions, ttyBatchingOptions )
 import LogPlus.Log                ( Log, WithLog, WithLogIO, WithLogIOL
                                   , mapLog, mapLogE )
 import LogPlus.LogRender          ( renderMapLog' )
@@ -113,6 +111,14 @@ import LogPlus.New                ( New( new ) )
 import LogPlus.ToDoc_             ( ToDoc_( toDoc_ ) )
 
 --------------------------------------------------------------------------------
+
+{- XXX move this to ... base-plus?  or something? -}
+
+whenJust ∷ ∀ α η . Monad η => (α → η ()) → 𝕄 α → η ()
+whenJust _  𝓝  = return ()
+whenJust io (𝓙 y) = io y
+
+----------------------------------------
 
 {-| Log with a timestamp, thus causing IO.  This version keeps IO & logging as
     split monads, because once joined, the only way to split them is to run
@@ -366,12 +372,6 @@ debugT = debug'
 logFilter ∷ (LogEntry ω → 𝔹) → LogEntry ω  → [LogEntry ω]
 logFilter p le = if p le then [le] else []
 
-----------
-
-whenJust ∷ ∀ α η . Monad η => (α → η ()) → 𝕄 α → η ()
-whenJust _  𝓝  = return ()
-whenJust io (𝓙 y) = io y
-
 ------------------------------------------------------------
 
 flusher ∷ ∀ σ ρ ψ μ . (MonadIO μ, Foldable ψ) =>
@@ -454,35 +454,6 @@ withSimpleHandler renderT pw fd hWrite entryToDoc =
 
 ----------------------------------------
 
-{-| Options suitable for logging to a file; notably a 1s flush delay and keep
-    messages rather than dropping if the queue fills.
- -}
-fileBatchingOptions ∷ BatchingOptions
-fileBatchingOptions = BatchingOptions { flushMaxDelay     = 1_000_000
-                                      , blockWhenFull     = 𝓣
-                                      , flushMaxQueueSize = 100
-                                      }
-
-{-| Options suitable for logging to a tty; notably a short flush delay (0.2s),
-    and drop messages rather than blocking if the queue fills (which should
-    be unlikely, with a length of 100 & 0.1s flush).
- -}
-
-----------------------------------------
-
-ttyBatchingOptions ∷ BatchingOptions
--- The max delay is a matter of experimentation; too high, and messages appear
--- long after their effects on stdout are apparent (not *wrong*, but a bit
--- misleading/inconvenient); too low, and the message lines get broken up
--- and intermingled with stdout (again, not *wrong*, but a terrible user
--- experience).
-ttyBatchingOptions = BatchingOptions { flushMaxDelay     = 2_000
-                                     , blockWhenFull     = 𝓕
-                                     , flushMaxQueueSize = 100
-                                     }
-
-
-----------------------------------------
 
 {-| Write a Log to a filehandle, with given rendering and options.
     The handle is created by a generator function, which may keep state.

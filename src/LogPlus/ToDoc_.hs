@@ -8,10 +8,6 @@ import Base1T
 
 import Prettyprinter  ( Doc, pretty )
 
-------------------------------------------------------------
---                     local imports                      --
-------------------------------------------------------------
-
 --------------------------------------------------------------------------------
 
 {-| this is called `ToDoc_` with an underscore to distinguish from any `ToDoc`
