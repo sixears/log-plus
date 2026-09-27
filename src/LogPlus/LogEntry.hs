@@ -29,9 +29,13 @@ import Control.Lens.Lens  ( Lens )
 import Control.Monad.Log  ( Severity( Critical, Emergency, Informational
                                     , Warning ) )
 
+-- more-unicode ------------------------
+
+import Data.MoreUnicode.Doc  ( (⊞) )
+
 -- prettyprinter -----------------------
 
-import Prettyprinter              ( Doc, (<+>), align, defaultLayoutOptions
+import Prettyprinter              ( Doc, align, defaultLayoutOptions
                                   , layoutPretty, pretty, vsep )
 import Prettyprinter.Render.Text  ( renderStrict )
 
@@ -202,11 +206,6 @@ _le0 = logEntry _cs2 (Just _tm) Informational (pretty ("log_entry 1" ∷ Text)) 
 _le1 ∷ LogEntry ()
 _le1 =
   logEntry _cs1 Nothing Critical (pretty ("multi-line\nlog\nmessage" ∷ Text)) ()
-
-infixr 5 ⊞
--- hsep
-(⊞) ∷ Doc α → Doc α → Doc α
-(⊞) = (<+>)
 
 _le2 ∷ LogEntry ()
 _le2 =
