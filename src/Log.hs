@@ -1,6 +1,5 @@
 module Log
-  ( Log, ToDoc_( toDoc_ )
-  , WithLog, WithLogIO
+  ( Log, WithLog, WithLogIO
 
   , emergency, alert, critical, err, warn, notice, info, debug
   , emergency', alert', critical', err', warn', notice', info', debug'
@@ -71,7 +70,7 @@ import Prettyprinter  ( Doc
                       , LayoutOptions( LayoutOptions )
                       , PageWidth( AvailablePerLine, Unbounded )
                       , SimpleDocStream( SEmpty )
-                      , layoutPretty, line', pretty, vsep
+                      , layoutPretty, line', vsep
                       )
 
 -- prettyprinter-ansi-terminal ---------
@@ -111,21 +110,9 @@ import LogPlus.Log                ( Log, WithLog, WithLogIO, WithLogIOL
 import LogPlus.LogRender          ( renderMapLog' )
 import LogPlus.LogTransformer     ( LogTransformer )
 import LogPlus.New                ( New( new ) )
+import LogPlus.ToDoc_             ( ToDoc_( toDoc_ ) )
 
 --------------------------------------------------------------------------------
-
-{-| this is called `ToDoc_` with an underscore to distinguish from any `ToDoc`
-    class that took a parameter for the annotation type -}
-class ToDoc_ α where
-  toDoc_ ∷ α → Doc ()
-
-instance ToDoc_ 𝕋 where
-  toDoc_ = pretty
-
-instance ToDoc_ (Doc()) where
-  toDoc_ = id
-
-------------------------------------------------------------
 
 {-| Log with a timestamp, thus causing IO.  This version keeps IO & logging as
     split monads, because once joined, the only way to split them is to run
@@ -379,54 +366,6 @@ debugT = debug'
 logFilter ∷ (LogEntry ω → 𝔹) → LogEntry ω  → [LogEntry ω]
 logFilter p le = if p le then [le] else []
 
-{-
-{- XXX maove this to LogPlus.LogRender -}
-{-| render a log to a list of Docs, per `LogRenderOpts` and applying `LogEntry`
-    transformers along the way -}
-renderMapLog ∷ ∀ ω ρ ψ . Foldable ψ =>
-               (LogEntry ω → Doc ρ) → ψ (LogTransformer ω) → Log ω
-             → [Doc ρ]
-renderMapLog renderer trx ls =
-  let -- trx' ∷ LogTransformer ω
-      trx' = foldr (\ a b → concatMap a ∘ b) (:[]) trx
-   in renderer ⊳ (toList ls ≫ trx')
-
---------------------
-
-{- XXX maove this to LogPlus.LogRender -}
-renderMapLog' ∷ ∀ ω ρ ψ . Foldable ψ =>
-                (LogEntry ω → Doc ρ) → ψ (LogTransformer ω) → LogEntry ω
-              → 𝕄 (Doc ρ)
-renderMapLog' renderer trx le = vsep' ∘ renderMapLog renderer trx $ osingle le
-
-----------------------------------------
-
-{- XXX maove this to LogPlus.LogRender -}
-{-| transform a monad ready to return (rather than effect) the logging -}
-logRender ∷ ∀ ω α η .
-            Monad η =>
-            LogRenderOpts ω
-          → [LogTransformer ω] -- log transformers, folded in order
-                               -- from right-to-left
-          → PureLoggingT (Log ω) η α
-          → η (α, [𝕋])
-logRender lro trx a = do
-  (a',ls) ← runPureLoggingT a
-  let lpretty ∷ Doc ρ → SimpleDocStream ρ
-      lpretty = layoutPretty (lro ⊣ lroOpts)
-      rendered = renderMapLog (lroRenderer lro) trx ls
-  return $ (a', RenderText.renderStrict ∘ lpretty ⊳ rendered)
-
---------------------
-
-{- XXX maove this to LogPlus.LogRender -}
-{-| `logRender` with `()` is sufficiently common to warrant a cheap alias -}
-logRender' ∷ ∀ ω η . Monad η =>
-             LogRenderOpts ω → [LogTransformer ω] → PureLoggingT (Log ω) η ()
-           → η [𝕋]
-logRender' opts trx lg = snd ⊳ (logRender opts trx lg)
--}
-
 ----------
 
 whenJust ∷ ∀ α η . Monad η => (α → η ()) → 𝕄 α → η ()
@@ -664,8 +603,6 @@ logToFD' ls trx h io = do
   if isatty
   then logToTTY'  ls trx h io
   else logToFileHandleNoAdornments ls trx h io
-
-----------------------------------------
 
 ----------------------------------------
 

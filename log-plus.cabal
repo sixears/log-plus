@@ -29,9 +29,13 @@ library
                     , LogPlus.FileSizeRotatorOptions
                     , LogPlus.FileSizeRotatorState
                     , LogPlus.FileTimeRotator
+                    , LogPlus.FileTimeRotatorOptions
                     , LogPlus.FileTimeRotatorState
                     , LogPlus.GlobPCRERegex
                     , LogPlus.HMay
+                    , LogPlus.Log
+                    , LogPlus.LogRender
+                    , LogPlus.LogTransformer
                     , LogPlus.MaxFiles
                     , LogPlus.MaxFileSize
                     , LogPlus.Name
@@ -42,6 +46,7 @@ library
                     , LogPlus.SizeBytes
                     , LogPlus.ThreadIsRunning
                     , LogPlus.TimeFilenameGenerator
+                    , LogPlus.ToDoc_
                     , LogPlus.UTCTime
                     , T.Log
   default-extensions: ConstraintKinds
