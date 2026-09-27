@@ -54,9 +54,8 @@ import qualified  Text.Printer  as  P
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log.LogEntry  ( LogEntry, LogEntry )
-
-import LogPlus.New  ( New( new ) )
+import LogPlus.LogEntry  ( LogEntry, LogEntry )
+import LogPlus.New       ( New( new ) )
 
 --------------------------------------------------------------------------------
 

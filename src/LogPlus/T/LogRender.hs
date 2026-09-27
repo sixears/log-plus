@@ -36,10 +36,10 @@ import Data.Text  qualified as  T
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log                ( Log, WithLog, log )
-import Log.LogEntry       ( LogEntry, logdoc )
-import Log.LogRenderOpts  ( logRenderOpts', lroRenderSevCS, lroRenderTSSevCSH
-                          , renderWithCallStack, renderWithSeverity )
+import LogPlus                ( Log, WithLog, log )
+import LogPlus.LogEntry       ( LogEntry, logdoc )
+import LogPlus.LogRenderOpts  ( logRenderOpts', lroRenderSevCS, lroRenderTSSevCSH
+                              , renderWithCallStack, renderWithSeverity )
 
 import LogPlus.LogRender   ( logRender' )
 import LogPlus.T.TestData  ( _log0m, _log1m )

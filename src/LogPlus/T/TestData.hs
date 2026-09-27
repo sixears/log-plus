@@ -19,11 +19,9 @@ import Control.Monad.Log  ( MonadLog
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log  ( logIO, logT )
-
-import Log.LogEntry  ( _le0,_le1,_le2,_le3 )
-
-import LogPlus.Log  ( Log )
+import LogPlus           ( logIO, logT )
+import LogPlus.Log       ( Log )
+import LogPlus.LogEntry  ( _le0,_le1,_le2,_le3 )
 
 --------------------------------------------------------------------------------
 

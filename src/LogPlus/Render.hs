@@ -47,9 +47,8 @@ import Text.Fmt  ( formatUTCYDoW )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log.HasSeverity  ( HasSeverity( severity ) )
-
-import LogPlus.UTCTime  ( HasUTCTimeY( utcTimeY ), )
+import LogPlus.HasSeverity  ( HasSeverity( severity ) )
+import LogPlus.UTCTime      ( HasUTCTimeY( utcTimeY ), )
 
 --------------------------------------------------------------------------------
 

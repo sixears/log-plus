@@ -1,9 +1,4 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
-{-# LANGUAGE UnicodeSyntax     #-}
-
-module Log.LogEntry
+module LogPlus.LogEntry
   ( LogEntry, attrs, logdoc, logEntry, mapDoc, mapPrefixDoc, prefix, simpleDoc
   , _le0, _le1, _le2, _le3, _le4n, _le5n )
 where
@@ -61,9 +56,8 @@ import Data.Time.Clock     ( UTCTime( UTCTime ), diffUTCTime,secondsToDiffTime )
 --                     local imports                      ---
 -----------------------------------------------------------
 
-import Log.HasSeverity  ( HasSeverity( severity ) )
-
-import LogPlus.UTCTime  ( HasUTCTimeY( utcTimeY ) )
+import LogPlus.HasSeverity  ( HasSeverity( severity ) )
+import LogPlus.UTCTime      ( HasUTCTimeY( utcTimeY ) )
 
 --------------------------------------------------------------------------------
 

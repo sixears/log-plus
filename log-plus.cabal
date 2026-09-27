@@ -14,10 +14,10 @@ maintainer:          haskell@sixears.com
 build-type:          Simple
 library
   ghc-options:        -O2 -W -Wall -fhelpful-errors
-  exposed-modules:    Log
-                    , Log.HasSeverity
-                    , Log.LogEntry
-                    , Log.LogRenderOpts
+  exposed-modules:    LogPlus
+                    , LogPlus.HasSeverity
+                    , LogPlus.LogEntry
+                    , LogPlus.LogRenderOpts
   other-modules:      LogPlus.Async
                     , LogPlus.BatchingOptions
                     , LogPlus.CallStackOption
@@ -49,7 +49,7 @@ library
                     , LogPlus.TimeFilenameGenerator
                     , LogPlus.ToDoc_
                     , LogPlus.UTCTime
-                    , T.Log
+                    , T.LogPlus
   default-extensions: ConstraintKinds
                     , DeriveFunctor
                     , DeriveGeneric

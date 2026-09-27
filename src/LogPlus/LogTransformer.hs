@@ -6,7 +6,7 @@ where
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log.LogEntry  ( LogEntry )
+import LogPlus.LogEntry  ( LogEntry )
 
 --------------------------------------------------------------------------------
 

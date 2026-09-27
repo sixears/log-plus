@@ -1,14 +1,4 @@
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE InstanceSigs          #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE UnicodeSyntax         #-}
-
-module Log.LogRenderOpts
+module LogPlus.LogRenderOpts
   ( LogR, LogRenderOpts
 
   , logRenderOpts'
@@ -75,15 +65,12 @@ import Data.Text  ( Text )
 --                     Local Imports                      --
 ------------------------------------------------------------
 
-import qualified  Log.LogEntry  as  LogEntry
-
-import Log.LogEntry  ( LogEntry , logEntry, _le0 )
-
-import LogPlus.Render  ( renderWithCallStack, renderWithSeverity
-                       , renderWithSeverityAndTimestamp
-                       , renderWithSeverityAnsi, renderWithStackHead
-                       , renderWithTimestamp
-                       )
+import LogPlus.LogEntry  ( LogEntry , logdoc, logEntry, _le0 )
+import LogPlus.Render    ( renderWithCallStack, renderWithSeverity
+                         , renderWithSeverityAndTimestamp
+                         , renderWithSeverityAnsi, renderWithStackHead
+                         , renderWithTimestamp
+                         )
 
 --------------------------------------------------------------------------------
 
@@ -189,7 +176,7 @@ lroRenderer opts =
   let foldf ∷ Foldable ψ ⇒ ψ (α → α) → α → α
       foldf = flip (foldr ($))
    in foldf (unLogRenderer (opts ⊣ logRenderer))
-            (reAnnotate ф ∘ view LogEntry.logdoc)
+            (reAnnotate ф ∘ view logdoc)
 
 lroRendererTests ∷ TestTree
 lroRendererTests =

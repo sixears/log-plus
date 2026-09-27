@@ -20,8 +20,8 @@ import ParserPlus  ( caseInsensitiveString, tries )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log.LogRenderOpts  ( LogR, renderWithCallStack, renderWithSeverity
-                          , renderWithStackHead, renderWithTimestamp )
+import LogPlus.LogRenderOpts  ( LogR, renderWithCallStack, renderWithSeverity
+                              , renderWithStackHead, renderWithTimestamp )
 
 --------------------------------------------------------------------------------
 

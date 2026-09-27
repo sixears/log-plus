@@ -27,9 +27,9 @@ import Single( MonoSingle( osingle ) )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log.LogEntry            ( LogEntry )
-import Log.LogRenderOpts       ( LogRenderOpts, lroOpts, lroRenderer )
 import LogPlus.Log             ( Log )
+import LogPlus.LogEntry        ( LogEntry )
+import LogPlus.LogRenderOpts   ( LogRenderOpts, lroOpts, lroRenderer )
 import LogPlus.LogTransformer  ( LogTransformer )
 
 --------------------------------------------------------------------------------

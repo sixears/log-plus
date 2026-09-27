@@ -1,7 +1,4 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE UnicodeSyntax     #-}
-
-module Log.HasSeverity
+module LogPlus.HasSeverity
   ( HasSeverity( severity ) )
 where
 

@@ -50,7 +50,7 @@ import Test.Tasty.HUnit  ( assertEqual, assertFailure )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import Log                      ( logToFiles', warnT )
+import LogPlus                  ( logToFiles', warnT )
 
 import LogPlus.Compressor       ( Compressor, compressorMay, compressPzstd )
 import LogPlus.FileSizeRotator  ( fileSizeRotator )
