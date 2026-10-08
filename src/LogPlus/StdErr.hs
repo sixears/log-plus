@@ -1,3 +1,4 @@
+{- XXX move this to base-plus?  or Base1? or somewhere? -}
 {- XXX move this somewhere -}
 
 module LogPlus.StdErr
@@ -28,7 +29,8 @@ stdErrT = stdErr
 
 --------------------
 
-{-| given an Either, dump a `Left` to stderr; return `Right` as a `Just` -}
+{-| given an Either, dump a `Left` to stderr (return `Data.Maybe.None`); else
+    return `Right` as a `Just` -}
 eToStderr ∷ ∀ ε α μ . (MonadIO μ, Printable ε) => 𝔼 ε α → μ (𝕄 α)
 eToStderr (𝓛 e) = stdErrT (toText e) ⪼ return 𝓝
 eToStderr (𝓡 r) = return (𝓙 r)

@@ -33,7 +33,6 @@ import LogPlus.New                ( New( new ) )
 --------------------------------------------------------------------------------
 
 type NumberedFnGen = AbsFile → 𝕄 MaxFiles → AbsFile
--- XXX type NumberedFnGen = FileLike α => α → 𝕄 MaxFiles → α
 
 data NumberedFilenameGenerator =
   NumberedFilenameGenerator

@@ -1,3 +1,5 @@
+{- XXX move this to base-plus?  or Base1? or somewhere? -}
+
 module LogPlus.Name
   ( HasName( name, nameS ), Name )
 where

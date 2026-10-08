@@ -1,3 +1,5 @@
+{- XXX move this to monadio-plus -}
+
 module LogPlus.MaxFileSize
   ( HasMaxFileSize(..), MaxFileSize )
 where

@@ -1,5 +1,6 @@
-{- XXX move this somewhere -}
+{- XXX move this somewhere, e.g., base-plus -}
 
+{-| very much like `ExceptT`; but that errors are reported direct to stderr -}
 module LogPlus.EMonad
   ( ꙗ, ꙝ, ꙝ', tests )
 where

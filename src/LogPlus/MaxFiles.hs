@@ -1,3 +1,5 @@
+{- XXX move this to monadio-plus -}
+
 module LogPlus.MaxFiles
   ( HasMaxFiles( maxFiles, maxFiles16 ), MaxFiles )
 where

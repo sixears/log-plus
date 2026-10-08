@@ -1,3 +1,5 @@
+{- XXX move this to monadio-plus -}
+
 module LogPlus.Perms
   ( HasPerms( perms ) )
 where

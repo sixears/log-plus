@@ -1,3 +1,5 @@
+{- XXX move this to base-plus?  or Base1? or somewhere?   Rename `-Y` to `-May`-}
+
 module LogPlus.UTCTime
   ( HasUTCTime( utcTime ), HasUTCTimeY( utcTimeY ) )
 where
@@ -19,9 +21,9 @@ instance HasUTCTime UTCTime where
 ------------------------------------------------------------
 
 class HasUTCTimeY α where
-  utcTimeY ∷ Lens' α (Maybe UTCTime)
+  utcTimeY ∷ Lens' α (𝕄 UTCTime)
 
-instance HasUTCTimeY (Maybe UTCTime) where
+instance HasUTCTimeY (𝕄 UTCTime) where
   utcTimeY = id
 
 -- that's all, folks! ----------------------------------------------------------

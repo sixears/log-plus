@@ -1,3 +1,5 @@
+{- XXX move this to base-plus?  or Base1? or somewhere? merge with Async.hs -}
+
 module LogPlus.ThreadIsRunning
   ( ThreadIsRunning(..), threadIsRunning )
 where

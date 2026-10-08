@@ -23,11 +23,6 @@ where
 
 import Base1T  hiding  ( toList )
 
--- XXX factor out rotators to separate modules
--- XXX move some functions to other modules
-
--- import Debug.Trace  ( traceShow, trace ) -- XXX
-
 -- base --------------------------------
 
 import qualified  Data.Foldable  as  Foldable
@@ -112,7 +107,7 @@ import LogPlus.ToDoc_             ( ToDoc_( toDoc_ ) )
 
 --------------------------------------------------------------------------------
 
-{- XXX move this to ... base-plus?  or something? -}
+{- XXX move this to ... base-plus?  Base1?  or something? -}
 
 whenJust ∷ ∀ α η . Monad η => (α → η ()) → 𝕄 α → η ()
 whenJust _  𝓝  = return ()
@@ -198,11 +193,13 @@ log ∷ ∀ ω η ρ . (WithLog ω η, ToDoc_ ρ) => Severity → ω → ρ → 
 log sv p txt =
   logMessage ∘ new ∘ singleton $ logEntry ?stack 𝓝 sv (toDoc_ txt) p
 
+----------
+
 {-| alias for `log`, to avoid clashing with `Prelude.log` -}
 logMsg ∷ ∀ ω η ρ . (WithLog ω η, ToDoc_ ρ) => Severity → ω → ρ → η ()
 logMsg = log
 
-----------
+--------------------
 
 {-| `log`, with a default value -}
 log' ∷ ∀ ω η ρ . (WithLog ω η, ToDoc_ ρ, Default ω) => Severity → ρ → η ()

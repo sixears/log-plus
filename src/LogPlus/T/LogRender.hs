@@ -212,7 +212,6 @@ logRender'Tests =
 -- tests -----------------------------------------------------------------------
 
 tests ∷ TestTree
--- XXX tests = dependentTestGroup "LogRender" AllSucceed [ logRenderTests, logRender'Tests ]
 tests = testGroup "LogRender" [ logRenderTests, logRender'Tests ]
 
 ----------------------------------------
