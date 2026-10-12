@@ -34,6 +34,10 @@ import Data.Maybe               ( catMaybes )
 import GHC.Exts                 ( IsList( toList ) )
 import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
 
+-- base-plus ---------------------------
+
+import BasePlus.Async  ( HasAsync( waitAsync ) )
+
 -- dlist -------------------------------
 
 import Data.DList  ( DList, singleton )
@@ -88,7 +92,6 @@ import Data.Time.Clock  ( getCurrentTime )
 --                     local imports                       -
 ------------------------------------------------------------
 
-import LogPlus.Async              ( HasAsync( waitAsync ) )
 import LogPlus.CallStackOption    ( CallStackOption, stdRenderers)
 import LogPlus.Compressor         ( HasCompressorMay( compressorMay )
                                   , compressPzstd )

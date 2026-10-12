@@ -12,6 +12,11 @@ import Prelude  ( error )
 import Data.List   ( sort, zip )
 import Data.Tuple  ( uncurry )
 
+-- base-plus ---------------------------
+
+import BasePlus.List    ( takeWhileM )
+import BasePlus.EMonad  ( ꙝ )
+
 -- extra -------------------------------
 
 import Data.List.Extra  ( dropEnd )
@@ -58,14 +63,12 @@ import Safe  ( lastMay, tailSafe )
 
 import LogPlus.AbsDir             ( HasAbsDir( absDir_ ) )
 import LogPlus.CompressorIO       ( CompressorIO,HasCompressorIO(compressorIO) )
-import LogPlus.EMonad                  ( ꙝ )
 import LogPlus.FilenameExtension  ( FilenameExtension
                                   , HasFilenameExtension( filenameExtension
                                                         , filenameExtensionPC )
                                   , appendExtension )
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ))
 import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
-import LogPlus.ListPlus           ( takeWhileM )
 import LogPlus.MaxFiles           ( MaxFiles, HasMaxFiles(maxFiles, maxFiles16))
 import LogPlus.Name               ( HasName( name, nameS ), Name )
 import LogPlus.New                ( New( new ) )

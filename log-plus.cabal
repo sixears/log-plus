@@ -18,8 +18,7 @@ library
                     , LogPlus.HasSeverity
                     , LogPlus.LogEntry
                     , LogPlus.LogRenderOpts
-  other-modules:      LogPlus.Async
-                    , LogPlus.BatchingOptions
+  other-modules:      LogPlus.BatchingOptions
                     , LogPlus.CallStackOption
                     , LogPlus.Compressor
                     , LogPlus.CompressorIO
@@ -45,7 +44,6 @@ library
                     , LogPlus.Perms
                     , LogPlus.Render
                     , LogPlus.SizeBytes
-                    , LogPlus.ThreadIsRunning
                     , LogPlus.TimeFilenameGenerator
                     , LogPlus.ToDoc_
                     , LogPlus.UTCTime

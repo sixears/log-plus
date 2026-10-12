@@ -10,6 +10,12 @@ import Data.List   ( and, reverse )
 import Data.Maybe  ( isJust )
 import System.IO   ( Handle )
 
+-- base-plus ---------------------------
+
+import BasePlus.Async  ( ThreadIsRunning( ThreadIsRunning, ThreadIsNotRunning )
+                       , threadIsRunning )
+import BasePlus.List   ( firstJust )
+
 -- base-unicode-symbols ----------------
 
 import Data.Eq.Unicode  ( (≠) )
@@ -45,16 +51,11 @@ import LogPlus.FilenameGenerator       ( FilenameGenerator( filenameGenerator ))
 import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
 import LogPlus.FileSizeRotatorState    ( FileSizeRotatorState )
 import LogPlus.HMay                    ( 𝕙May )
-import LogPlus.ListPlus                ( firstJust )
 import LogPlus.MaxFiles                ( MaxFiles )
 import LogPlus.MaxFileSize             ( maxFileSize )
 import LogPlus.New                     ( new )
 import LogPlus.Perms                   ( perms )
 import LogPlus.SizeBytes               ( SizeBytes, sizeBytes )
-import LogPlus.ThreadIsRunning         ( ThreadIsRunning( ThreadIsRunning
-                                                        , ThreadIsNotRunning )
-                                       , threadIsRunning
-                                       )
 
 --------------------------------------------------------------------------------
 

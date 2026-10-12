@@ -10,6 +10,11 @@ import Data.List   ( and )
 import Data.Maybe  ( isJust )
 import System.IO   ( Handle )
 
+-- base-plus ---------------------------
+
+import BasePlus.Async  ( ThreadIsRunning( ThreadIsRunning, ThreadIsNotRunning )
+                       , threadIsRunning )
+
 -- base-unicode-symbols ----------------
 
 import Data.Eq.Unicode  ( (≠) )
@@ -59,10 +64,6 @@ import LogPlus.HMay                    ( 𝕙May )
 import LogPlus.New                     ( new )
 import LogPlus.Perms                   ( perms )
 import LogPlus.StdErr                  ( stdErrT )
-import LogPlus.ThreadIsRunning         ( ThreadIsRunning( ThreadIsRunning
-                                                        , ThreadIsNotRunning )
-                                       , threadIsRunning
-                                       )
 
 --------------------------------------------------------------------------------
 

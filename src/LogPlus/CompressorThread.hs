@@ -9,6 +9,11 @@ import Base1T
 
 import Control.Concurrent.Async  ( Async, async )
 
+-- base-plus ---------------------------
+
+import BasePlus.Async   ( HasAsync( async_ ) )
+import BasePlus.EMonad  ( ꙝ' )
+
 -- fpath -------------------------------
 
 import FPath.AbsFile   ( AbsFile )
@@ -31,10 +36,8 @@ import System.Posix.Types  ( FileMode )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import LogPlus.Async              ( HasAsync( async_ ) )
 import LogPlus.Compressor         ( Compressor )
 import LogPlus.CompressorIO       ( HasCompressorIO( compressorIOF ) )
-import LogPlus.EMonad             ( ꙝ' )
 import LogPlus.FilenameExtension  ( HasFilenameExtension( filenameExtensionPC ))
 import LogPlus.New                ( New( new ) )
 
