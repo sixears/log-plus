@@ -45,7 +45,6 @@ library
                     , LogPlus.SizeBytes
                     , LogPlus.TimeFilenameGenerator
                     , LogPlus.ToDoc_
-                    , LogPlus.UTCTime
 
                     , T.LogPlus
                     , LogPlus.T.FileSizeRotator

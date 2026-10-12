@@ -12,6 +12,10 @@ import Prelude  ( seq )
 import GHC.Generics  ( Generic )
 import GHC.Stack     ( SrcLoc( SrcLoc ), fromCallSiteList )
 
+-- base-plus ---------------------------
+
+import BasePlus.UTCTime  ( HasUTCTimeMay( utcTimeMay ) )
+
 -- deepseq -----------------------------
 
 import Control.DeepSeq  ( NFData( rnf ) )
@@ -61,7 +65,6 @@ import Data.Time.Clock     ( UTCTime( UTCTime ), diffUTCTime,secondsToDiffTime )
 -----------------------------------------------------------
 
 import LogPlus.HasSeverity  ( HasSeverity( severity ) )
-import LogPlus.UTCTime      ( HasUTCTimeY( utcTimeY ) )
 
 --------------------------------------------------------------------------------
 
@@ -84,7 +87,7 @@ instance Functor LogEntry where
 instance Eq ω ⇒ Eq (LogEntry ω) where
   le == le' = let simpleDoc' l = layoutPretty defaultLayoutOptions (l ⊣ logdoc)
                in   le ⊣ callsitelist ≡ le' ⊣ callsitelist
-                  ∧ le ⊣ utcTimeY     ≡ le' ⊣ utcTimeY
+                  ∧ le ⊣ utcTimeMay   ≡ le' ⊣ utcTimeMay
                   ∧ le ⊣ severity     ≡ le' ⊣ severity
                   ∧ simpleDoc' le     ≡ simpleDoc' le'
                   ∧ le ⊣ attrs        ≡ le' ⊣ attrs
@@ -95,7 +98,7 @@ instance Equish ω ⇒ Equish (LogEntry ω) where
   {- | Approximately equal; that is, equal but with timestamps differing by no
        more than 10s (absolute); and no check on the callsitelist. -}
   le ≃ le' = let simpleDoc' l = layoutPretty defaultLayoutOptions (l ⊣ logdoc)
-              in   (case ((le ⊣ utcTimeY), (le' ⊣ utcTimeY)) of
+              in   (case ((le ⊣ utcTimeMay), (le' ⊣ utcTimeMay)) of
                       (Nothing, Nothing) → 𝓣
                       (Just t,  Just t') → abs (diffUTCTime t t') < 10
                       (_, _)             → 𝓕
@@ -119,10 +122,10 @@ instance HasCallstack (LogEntry ω) where
 instance HasSeverity (LogEntry ω) where
   severity = lens _severity (\ le sv → le { _severity = sv })
 
--- HasUTCTimeY -------------------------
+-- HasUTCTimeMay -----------------------
 
-instance HasUTCTimeY (LogEntry ω) where
-  utcTimeY = lens _timestamp (\ le tm → le { _timestamp = tm })
+instance HasUTCTimeMay (LogEntry ω) where
+  utcTimeMay = lens _timestamp (\ le tm → le { _timestamp = tm })
 
 -- NFData ------------------------------
 
@@ -173,7 +176,7 @@ instance Printable ω ⇒ Printable (LogEntry ω) where
   print le =
     let renderDoc = renderStrict ∘ layoutPretty defaultLayoutOptions
      in P.text $ [fmt|[%Z|%-4t] %k %t <%T>|]
-                                          (le ⊣ utcTimeY)
+                                          (le ⊣ utcTimeMay)
                                           (take 4 ∘ pack ∘ show $ le ⊣ severity)
                                           le
                                           (renderDoc $ le ⊣ logdoc)

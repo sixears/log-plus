@@ -10,6 +10,10 @@ import Base1T
 import GHC.Stack  ( SrcLoc
                   , getCallStack, prettySrcLoc, srcLocFile,srcLocStartLine )
 
+-- base-plus ---------------------------
+
+import BasePlus.UTCTime  ( HasUTCTimeMay( utcTimeMay ), )
+
 -- has-callstack -----------------------
 
 import HasCallstack  ( HasCallstack( stackhead ) )
@@ -48,7 +52,6 @@ import Text.Fmt  ( formatUTCYDoW )
 ------------------------------------------------------------
 
 import LogPlus.HasSeverity  ( HasSeverity( severity ) )
-import LogPlus.UTCTime      ( HasUTCTimeY( utcTimeY ), )
 
 --------------------------------------------------------------------------------
 
@@ -101,12 +104,12 @@ renderWithSeverity f m = brackets (renderSeverity m) ⊞ align (f m)
 
 ----------------------------------------
 
-renderTimestamp  ∷ HasUTCTimeY τ ⇒ τ → Doc ρ
-renderTimestamp m = pretty (formatUTCYDoW 𝓝 $ m ⊣ utcTimeY)
+renderTimestamp  ∷ HasUTCTimeMay τ ⇒ τ → Doc ρ
+renderTimestamp m = pretty (formatUTCYDoW 𝓝 $ m ⊣ utcTimeMay)
 
 ----------
 
-renderWithTimestamp ∷ HasUTCTimeY τ ⇒ (τ → Doc ρ) → τ → Doc ρ
+renderWithTimestamp ∷ HasUTCTimeMay τ ⇒ (τ → Doc ρ) → τ → Doc ρ
 renderWithTimestamp f m = brackets (renderTimestamp m) ⊞ align (f m)
 
 ----------------------------------------
@@ -149,7 +152,7 @@ renderWithCallStack f m =
 
 ----------------------------------------
 
-renderWithSeverityAndTimestamp ∷ (HasSeverity τ, HasUTCTimeY τ) ⇒
+renderWithSeverityAndTimestamp ∷ (HasSeverity τ, HasUTCTimeMay τ) ⇒
                                  (τ → Doc ρ) → τ → Doc ρ
 renderWithSeverityAndTimestamp f m =
   brackets (renderTimestamp m ⊕ "|" ⊕ renderSeverity m) ⊞ align (f m)
