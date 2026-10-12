@@ -37,6 +37,7 @@ import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
 -- base-plus ---------------------------
 
 import BasePlus.Async  ( HasAsync( waitAsync ) )
+import BasePlus.Maybe  ( whenJust )
 import BasePlus.New    ( New( new ) )
 
 -- dlist -------------------------------
@@ -109,14 +110,6 @@ import LogPlus.LogTransformer     ( LogTransformer )
 import LogPlus.ToDoc_             ( ToDoc_( toDoc_ ) )
 
 --------------------------------------------------------------------------------
-
-{- XXX move this to ... base-plus?  Base1?  or something? -}
-
-whenJust ∷ ∀ α η . Monad η => (α → η ()) → 𝕄 α → η ()
-whenJust _  𝓝  = return ()
-whenJust io (𝓙 y) = io y
-
-----------------------------------------
 
 {-| Log with a timestamp, thus causing IO.  This version keeps IO & logging as
     split monads, because once joined, the only way to split them is to run
