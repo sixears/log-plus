@@ -12,8 +12,9 @@ import System.IO   ( Handle )
 
 -- base-plus ---------------------------
 
-import BasePlus.Async  ( ThreadIsRunning( ThreadIsRunning, ThreadIsNotRunning )
-                       , threadIsRunning )
+import BasePlus.Async   ( ThreadIsRunning( ThreadIsRunning, ThreadIsNotRunning )
+                        , threadIsRunning )
+import BasePlus.StdErr  ( stdErrT )
 
 -- base-unicode-symbols ----------------
 
@@ -63,7 +64,6 @@ import LogPlus.FileTimeRotatorState    ( FileTimeRotatorState )
 import LogPlus.HMay                    ( 𝕙May )
 import LogPlus.New                     ( new )
 import LogPlus.Perms                   ( perms )
-import LogPlus.StdErr                  ( stdErrT )
 
 --------------------------------------------------------------------------------
 

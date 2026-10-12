@@ -16,6 +16,7 @@ import Data.Tuple  ( uncurry )
 
 import BasePlus.List    ( takeWhileM )
 import BasePlus.EMonad  ( ꙝ )
+import BasePlus.StdErr  ( eToStderrIO, stdErrT )
 
 -- extra -------------------------------
 
@@ -72,7 +73,6 @@ import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.MaxFiles           ( MaxFiles, HasMaxFiles(maxFiles, maxFiles16))
 import LogPlus.Name               ( HasName( name, nameS ), Name )
 import LogPlus.New                ( New( new ) )
-import LogPlus.StdErr             ( eToStderrIO, stdErrT )
 
 import LogPlus.Paths  qualified as  Paths
 
