@@ -4,6 +4,10 @@ where
 
 import Base1T
 
+-- base-plus ---------------------------
+
+import BasePlus.New  ( New( new ) )
+
 -- fpath -------------------------------
 
 import FPath.Parseable      ( __parseS__ )
@@ -18,7 +22,6 @@ import Data.Time.Format  ( FormatTime, defaultTimeLocale, formatTime )
 ------------------------------------------------------------
 
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
-import LogPlus.New                ( New( new ) )
 
 --------------------------------------------------------------------------------
 

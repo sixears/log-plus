@@ -16,6 +16,8 @@ import Data.Tuple  ( uncurry )
 
 import BasePlus.List    ( takeWhileM )
 import BasePlus.EMonad  ( ꙝ )
+import BasePlus.Name    ( HasName( name, nameS ), Name )
+import BasePlus.New     ( New( new ) )
 import BasePlus.StdErr  ( eToStderrIO, stdErrT )
 
 -- extra -------------------------------
@@ -71,8 +73,6 @@ import LogPlus.FilenameExtension  ( FilenameExtension
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ))
 import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.MaxFiles           ( MaxFiles, HasMaxFiles(maxFiles, maxFiles16))
-import LogPlus.Name               ( HasName( name, nameS ), Name )
-import LogPlus.New                ( New( new ) )
 
 import LogPlus.Paths  qualified as  Paths
 
@@ -135,7 +135,7 @@ compressPzstd =
         return ()
       pzstdIO ∷ AbsFile → AbsFile → IO ()
       pzstdIO f t = join $ eToStderrIO ⊳ (ѥ @ProcError $ pzstd f t)
-  in  new (new @Name @String "pstzd",new @CompressorIO pzstdIO,
+  in  new (new @Name @𝕋 "pstzd",new @CompressorIO pzstdIO,
            new @FilenameExtension [pc|zst|])
 
 ----------------------------------------

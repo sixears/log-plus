@@ -9,6 +9,10 @@ where
 
 import Base1T
 
+-- base-plus ---------------------------
+
+import BasePlus.New  ( New( new ) )
+
 -- fpath -------------------------------
 
 import FPath.FileLike       ( FileLike, (⊙) )
@@ -17,12 +21,6 @@ import FPath.PathComponent  ( PathComponent )
 -- lens --------------------------------
 
 import Control.Lens.Getter  ( view )
-
-------------------------------------------------------------
---                     local imports                       -
-------------------------------------------------------------
-
-import LogPlus.New  ( New( new ) )
 
 --------------------------------------------------------------------------------
 

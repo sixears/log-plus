@@ -12,11 +12,9 @@ import GHC.Enum  ( Enum )
 import GHC.Num   ( Num )
 import GHC.Real  ( Integral, Real )
 
-------------------------------------------------------------
---                     local imports                      --
-------------------------------------------------------------
+-- base-plus ---------------------------
 
-import LogPlus.New  ( New( new ) )
+import BasePlus.New  ( New( new ) )
 
 --------------------------------------------------------------------------------
 

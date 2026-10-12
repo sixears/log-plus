@@ -10,11 +10,14 @@ import Base1T
 
 import GHC.Num  ( Num )
 
+-- base-plus ---------------------------
+
+import BasePlus.New  ( New( new ) )
+
 ------------------------------------------------------------
 --                     local imports                      --
 ------------------------------------------------------------
 
-import LogPlus.New        ( New( new ) )
 import LogPlus.SizeBytes  ( HasSizeBytes( sizeBytes ), SizeBytes )
 
 --------------------------------------------------------------------------------

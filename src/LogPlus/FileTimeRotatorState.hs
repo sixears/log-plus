@@ -4,6 +4,10 @@ where
 
 import Base1T
 
+-- base-plus -----------------------
+
+import BasePlus.New  ( New( new ) )
+
 -- monadio-plus ------------------------
 
 import MonadIO.NamedHandle  ( ℍ )
@@ -15,7 +19,6 @@ import MonadIO.NamedHandle  ( ℍ )
 import LogPlus.CompressorThread  ( CompressorThread
                                  , HasCompressorThreadMay(compressorThreadMay) )
 import LogPlus.HMay              ( HasℍMay( 𝕙May ) )
-import LogPlus.New               ( New( new ) )
 
 --------------------------------------------------------------------------------
 

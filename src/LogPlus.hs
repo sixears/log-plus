@@ -37,6 +37,7 @@ import System.IO                ( Handle, hFlush, hIsTerminalDevice, stderr )
 -- base-plus ---------------------------
 
 import BasePlus.Async  ( HasAsync( waitAsync ) )
+import BasePlus.New    ( New( new ) )
 
 -- dlist -------------------------------
 
@@ -105,7 +106,6 @@ import LogPlus.LogRenderOpts      ( LogR, LogRenderOpts
                                   , logRenderOpts', lroRenderer, lroWidth )
 
 import LogPlus.LogTransformer     ( LogTransformer )
-import LogPlus.New                ( New( new ) )
 import LogPlus.ToDoc_             ( ToDoc_( toDoc_ ) )
 
 --------------------------------------------------------------------------------

@@ -11,15 +11,13 @@ import Base1T
 import GHC.Enum  ( Enum )
 import GHC.Num   ( Num )
 
+-- base-plus ---------------------------
+
+import BasePlus.New  ( New( new ) )
+
 -- lens --------------------------------
 
 import Control.Lens.Getter  ( view )
-
-------------------------------------------------------------
---                     local imports                      --
-------------------------------------------------------------
-
-import LogPlus.New  ( New( new ) )
 
 --------------------------------------------------------------------------------
 

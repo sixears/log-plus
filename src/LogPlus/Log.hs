@@ -12,6 +12,10 @@ import Data.Monoid    ( Monoid )
 import GHC.Exts       ( IsList( toList ) )
 import GHC.Generics   ( Generic )
 
+-- base-plus ---------------------------
+
+import BasePlus.New  ( New( new ) )
+
 -- deepseq -----------------------------
 
 import Control.DeepSeq  ( NFData )
@@ -55,7 +59,6 @@ import qualified  Text.Printer  as  P
 ------------------------------------------------------------
 
 import LogPlus.LogEntry  ( LogEntry, LogEntry )
-import LogPlus.New       ( New( new ) )
 
 --------------------------------------------------------------------------------
 

@@ -4,6 +4,10 @@ where
 
 import Base1T
 
+-- base-plus ---------------------------
+
+import BasePlus.New  ( New( new ) )
+
 -- fpath -------------------------------
 
 import FPath.AbsDir  ( AbsDir )
@@ -33,7 +37,6 @@ import LogPlus.FilenameGenerator      ( FilenameGenerator( filenameGenerator ) )
 import LogPlus.GlobPCRERegex          ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.MaxFiles               ( HasMaxFiles( maxFiles )
                                        , MaxFiles )
-import LogPlus.New                    ( New( new ) )
 import LogPlus.Perms                  ( HasPerms( perms ) )
 import LogPlus.TimeFilenameGenerator  ( TimeFilenameGenerator, TimeFnGen
                                       , dayFilenameGenerator )

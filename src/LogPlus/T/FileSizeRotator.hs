@@ -9,6 +9,10 @@ import Base1T
 import Data.Bifunctor  ( bimap )
 import Data.List       ( sort, sortOn )
 
+-- base-plus ---------------------------
+
+import BasePlus.New  ( new )
+
 -- fpath -------------------------------
 
 import FPath                   ( (⫻), stripDirFPE )
@@ -56,7 +60,6 @@ import LogPlus.Compressor       ( Compressor, compressorMay, compressPzstd )
 import LogPlus.FileSizeRotator  ( fileSizeRotator )
 import LogPlus.MaxFiles         ( MaxFiles, maxFiles )
 import LogPlus.MaxFileSize      ( maxFileSize )
-import LogPlus.New              ( new )
 
 --------------------------------------------------------------------------------
 

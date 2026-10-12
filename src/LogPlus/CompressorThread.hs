@@ -13,6 +13,7 @@ import Control.Concurrent.Async  ( Async, async )
 
 import BasePlus.Async   ( HasAsync( async_ ) )
 import BasePlus.EMonad  ( ꙝ' )
+import BasePlus.New     ( New( new ) )
 
 -- fpath -------------------------------
 
@@ -39,7 +40,6 @@ import System.Posix.Types  ( FileMode )
 import LogPlus.Compressor         ( Compressor )
 import LogPlus.CompressorIO       ( HasCompressorIO( compressorIOF ) )
 import LogPlus.FilenameExtension  ( HasFilenameExtension( filenameExtensionPC ))
-import LogPlus.New                ( New( new ) )
 
 --------------------------------------------------------------------------------
 

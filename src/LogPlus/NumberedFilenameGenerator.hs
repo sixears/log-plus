@@ -8,6 +8,10 @@ import Base1T
 
 import GHC.Real  ( Integral, div )
 
+-- base-plus ---------------------------
+
+import BasePlus.New  ( New( new ) )
+
 -- fpath -------------------------------
 
 import FPath.AbsFile        ( AbsFile )
@@ -28,7 +32,6 @@ import Natural.Unsigned   ( I64, Unsigned )
 
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ) )
 import LogPlus.MaxFiles           ( HasMaxFiles( maxFiles16 ), MaxFiles )
-import LogPlus.New                ( New( new ) )
 
 --------------------------------------------------------------------------------
 

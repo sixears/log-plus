@@ -8,6 +8,10 @@ import Base1T
 
 import GHC.Real  ( (^) )
 
+-- base-plus ---------------------------
+
+import BasePlus.New  ( New( new ) )
+
 -- base-unicode-symbols ----------------
 
 import Prelude.Unicode  ( (×) )
@@ -28,7 +32,6 @@ import LogPlus.FilenameGenerator         ( FilenameGenerator( filenameGenerator 
 import LogPlus.MaxFiles                  ( HasMaxFiles( maxFiles ), MaxFiles )
 import LogPlus.MaxFileSize               ( HasMaxFileSize( maxFileSize )
                                          , MaxFileSize )
-import LogPlus.New                       ( New( new ) )
 import LogPlus.NumberedFilenameGenerator ( NumberedFilenameGenerator
                                          , NumberedFnGen
                                          , simpleNumberedFilenameGenerator

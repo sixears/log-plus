@@ -15,6 +15,7 @@ import System.IO   ( Handle )
 import BasePlus.Async  ( ThreadIsRunning( ThreadIsRunning, ThreadIsNotRunning )
                        , threadIsRunning )
 import BasePlus.List   ( firstJust )
+import BasePlus.New    ( new )
 
 -- base-unicode-symbols ----------------
 
@@ -53,7 +54,6 @@ import LogPlus.FileSizeRotatorState    ( FileSizeRotatorState )
 import LogPlus.HMay                    ( 𝕙May )
 import LogPlus.MaxFiles                ( MaxFiles )
 import LogPlus.MaxFileSize             ( maxFileSize )
-import LogPlus.New                     ( new )
 import LogPlus.Perms                   ( perms )
 import LogPlus.SizeBytes               ( SizeBytes, sizeBytes )
 
