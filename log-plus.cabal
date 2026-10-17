@@ -39,7 +39,6 @@ library
                     , LogPlus.MaxFileSize
                     , LogPlus.NumberedFilenameGenerator
                     , LogPlus.Paths
-                    , LogPlus.Perms
                     , LogPlus.Render
                     , LogPlus.SizeBytes
                     , LogPlus.TimeFilenameGenerator

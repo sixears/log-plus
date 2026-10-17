@@ -15,6 +15,7 @@ import FPath.AbsDir  ( AbsDir )
 -- monadio-plus ------------------------
 
 import MonadIO.Directory  ( GlobPCRERegex, HasGlobPCRERegex( globPCRERegex ) )
+import MonadIO.FileMode   ( HasFileMode( fileMode ) )
 
 -- time --------------------------------
 
@@ -36,7 +37,6 @@ import LogPlus.Compressor             ( Compressor
 import LogPlus.FilenameGenerator      ( FilenameGenerator( filenameGenerator ) )
 import LogPlus.MaxFiles               ( HasMaxFiles( maxFiles )
                                        , MaxFiles )
-import LogPlus.Perms                  ( HasPerms( perms ) )
 import LogPlus.TimeFilenameGenerator  ( TimeFilenameGenerator, TimeFnGen
                                       , dayFilenameGenerator )
 
@@ -58,7 +58,7 @@ data FileTimeRotatorOptions τ =
                               --   compression, the perms may be wrong:
                               --   they are set after compression has
                               --   completed
-                              _ftro_perms  ∷ FileMode
+                              _ftro_file_mode  ∷ FileMode
                             , -- | Maximum number of files to
                               --   manage/rotate; the numbers appended will
                               --   be zero-padded to all be the same length.
@@ -92,8 +92,8 @@ instance HasMaxFiles (FileTimeRotatorOptions τ) where
 
 ----------
 
-instance HasPerms (FileTimeRotatorOptions τ) where
-  perms = lens _ftro_perms (\ f p → f { _ftro_perms = p })
+instance HasFileMode (FileTimeRotatorOptions τ) where
+  fileMode = lens _ftro_file_mode (\ f p → f { _ftro_file_mode = p })
 
 ----------
 
@@ -122,12 +122,12 @@ instance HasGlobPCRERegex (FileTimeRotatorOptions τ) where
 instance (FormatTime τ, Show τ) => New (FileTimeRotatorOptions τ)
                                        (AbsDir,GlobPCRERegex)     where
   new (dir,pcre) = let fngen = dayFilenameGenerator
-                   in  FileTimeRotatorOptions { _ftro_cmprss = 𝓙 compressPzstd
-                                              , _ftro_perms  = 0o644
-                                              , _ftro_mxfs   = new (10 ∷ Word16)
-                                              , _ftro_fngen  = fngen
-                                              , _ftro_glob   = pcre
-                                              , _ftro_dir    = dir
+                   in  FileTimeRotatorOptions { _ftro_cmprss   = 𝓙 compressPzstd
+                                              , _ftro_file_mode= 0o644
+                                              , _ftro_mxfs     = new(10 ∷ Word16)
+                                              , _ftro_fngen    = fngen
+                                              , _ftro_glob     = pcre
+                                              , _ftro_dir      = dir
                                               }
 
 -- that's all, folks! ----------------------------------------------------------

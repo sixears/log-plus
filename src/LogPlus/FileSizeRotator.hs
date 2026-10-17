@@ -32,6 +32,7 @@ import MonadError.IO.Error  ( IOError )
 
 -- monadio-plus ------------------------
 
+import MonadIO.FileMode     ( fileMode )
 import MonadIO.NamedHandle  ( HEncoding( NoEncoding ), ℍ
                             , handle, hClose )
 import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
@@ -54,7 +55,6 @@ import LogPlus.FileSizeRotatorState    ( FileSizeRotatorState )
 import LogPlus.HMay                    ( 𝕙May )
 import LogPlus.MaxFiles                ( MaxFiles )
 import LogPlus.MaxFileSize             ( maxFileSize )
-import LogPlus.Perms                   ( perms )
 import LogPlus.SizeBytes               ( SizeBytes, sizeBytes )
 
 --------------------------------------------------------------------------------
@@ -82,11 +82,11 @@ fileSizeRotator opts fn st_ _sds t = do
       mkhandle    = do
         mv_files ← fileNumberedMoves fn opts (st ⊣ 𝕙May)
         compressor_thread ← liftIO$ firstJust ⊳ forM (reverse mv_files)
-                                                     (mvCompress $ opts ⊣ perms)
+                                                     (mvCompress $ opts⊣fileMode)
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => AbsFile → μ ℍ
             open_file =
-              ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ perms)
+              ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ fileMode)
         ẖ ∷ ℍ ← open_file ((filenameGenerator opts) fn (𝓝∷𝕄 MaxFiles))
         return (ẖ, compressor_thread)
 

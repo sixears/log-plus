@@ -16,6 +16,10 @@ import BasePlus.New  ( New( new ) )
 
 import Prelude.Unicode  ( (×) )
 
+-- monadio-plus ------------------------
+
+import MonadIO.FileMode   ( HasFileMode( fileMode ) )
+
 -- unix --------------------------------
 
 import System.Posix.Types  ( FileMode )
@@ -28,7 +32,7 @@ import LogPlus.Compressor                ( Compressor
                                          , HasCompressorMay( compressorMay )
                                          , compressPzstd
                                          )
-import LogPlus.FilenameGenerator         ( FilenameGenerator( filenameGenerator ) )
+import LogPlus.FilenameGenerator         ( FilenameGenerator(filenameGenerator) )
 import LogPlus.MaxFiles                  ( HasMaxFiles( maxFiles ), MaxFiles )
 import LogPlus.MaxFileSize               ( HasMaxFileSize( maxFileSize )
                                          , MaxFileSize )
@@ -36,7 +40,6 @@ import LogPlus.NumberedFilenameGenerator ( NumberedFilenameGenerator
                                          , NumberedFnGen
                                          , simpleNumberedFilenameGenerator
                                          )
-import LogPlus.Perms                     ( HasPerms( perms ) )
 
 --------------------------------------------------------------------------------
 
@@ -63,7 +66,7 @@ data FileSizeRotatorOptions =
                               --   compression, the perms may be wrong:
                               --   they are set after compression has
                               --   completed
-                              _fsro_perms  ∷ FileMode
+                              _fsro_file_mode  ∷ FileMode
                             , -- | maximum number of files to
                               --   manage/rotate; the numbers appended will
                               --   be zero-padded to all be the same length
@@ -88,8 +91,8 @@ instance HasMaxFiles FileSizeRotatorOptions where
 
 ----------
 
-instance HasPerms FileSizeRotatorOptions where
-  perms = lens _fsro_perms (\ f p → f { _fsro_perms = p })
+instance HasFileMode FileSizeRotatorOptions where
+  fileMode = lens _fsro_file_mode (\ f p → f { _fsro_file_mode = p })
 
 ----------
 
@@ -112,11 +115,11 @@ instance FilenameGenerator FileSizeRotatorOptions NumberedFnGen where
 instance New FileSizeRotatorOptions MaxFiles where
   new mxf =
     let fngen = simpleNumberedFilenameGenerator mxf
-    in  FileSizeRotatorOptions { _fsro_cmprss = 𝓙 compressPzstd
-                               , _fsro_mxsz   = 100 × 1_024^(3∷Word8) -- 100MiB
-                               , _fsro_perms  = 0o644
-                               , _fsro_mxfs   = mxf
-                               , _fsro_fngen  = fngen
+    in  FileSizeRotatorOptions { _fsro_cmprss    = 𝓙 compressPzstd
+                               , _fsro_mxsz      = 100 × 1_024^(3∷Word8) --100MiB
+                               , _fsro_file_mode = 0o644
+                               , _fsro_mxfs      = mxf
+                               , _fsro_fngen     = fngen
                                }
 
 -- that's all, folks! ----------------------------------------------------------

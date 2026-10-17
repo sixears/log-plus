@@ -43,6 +43,7 @@ import MonadError.IO.Error  ( IOError )
 -- monadio-plus ------------------------
 
 import MonadIO.File         ( unlink )
+import MonadIO.FileMode     ( fileMode )
 import MonadIO.NamedHandle  ( HEncoding( NoEncoding ), ℍ
                             , handle, hClose, hname )
 import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
@@ -63,7 +64,6 @@ import LogPlus.FilenameGenerator       ( FilenameGenerator( filenameGenerator ))
 import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState    ( FileTimeRotatorState )
 import LogPlus.HMay                    ( 𝕙May )
-import LogPlus.Perms                   ( perms )
 
 --------------------------------------------------------------------------------
 
@@ -124,12 +124,12 @@ fileTimeRotator_ opts pc_ d st_ _sds _t = do
         compressor_thread ← case cmprs of
           𝓝         → return 𝓝
           𝓙 (fn',c) →
-            𝓙 ⊳ asyncCompressorThread c (opts ⊣ perms) fn'
+            𝓙 ⊳ asyncCompressorThread c (opts ⊣ fileMode) fn'
 
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => AbsFile → μ ℍ
             open_file =
-              ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ perms)
+              ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ fileMode)
         ẖ ∷ ℍ ← open_file afn
         return (ẖ, compressor_thread)
 
