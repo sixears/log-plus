@@ -1,5 +1,3 @@
-{- XXX move this to monadio-plus -}
-
 module LogPlus.MaxFiles
   ( HasMaxFiles( maxFiles, maxFiles16 ), MaxFiles )
 where
@@ -13,11 +11,13 @@ import GHC.Num   ( Num )
 
 -- base-plus ---------------------------
 
-import BasePlus.New  ( New( new ) )
+import BasePlus.Word16  ( IsWord16( word16 ) )
+import BasePlus.New     ( New( new ) )
 
 -- lens --------------------------------
 
 import Control.Lens.Getter  ( view )
+import Control.Lens.Iso     ( iso )
 
 --------------------------------------------------------------------------------
 
@@ -26,6 +26,10 @@ newtype MaxFiles = MaxFiles { unMaxFiles ∷ Word16 } deriving (Enum,Num,Show)
 ----------
 
 instance New MaxFiles Word16 where new = MaxFiles
+
+----------
+
+instance IsWord16 MaxFiles where word16 = iso unMaxFiles MaxFiles
 
 ------------------------------------------------------------
 

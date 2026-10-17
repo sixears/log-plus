@@ -48,7 +48,7 @@ import MonadError.IO.Error  ( IOError )
 
 -- monadio-plus ------------------------
 
-import MonadIO.Directory              ( glob )
+import MonadIO.Directory              ( HasGlobPCRERegex( globPCRERegex ), glob )
 import MonadIO.File                   ( devnull )
 import MonadIO.FStat                  ( FExists( FExists ), lfexists )
 import MonadIO.Error.CreateProcError  ( ProcError )
@@ -71,7 +71,6 @@ import LogPlus.FilenameExtension  ( FilenameExtension
                                                         , filenameExtensionPC )
                                   , appendExtension )
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ))
-import LogPlus.GlobPCRERegex      ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.MaxFiles           ( MaxFiles, HasMaxFiles(maxFiles, maxFiles16))
 
 import LogPlus.Paths  qualified as  Paths

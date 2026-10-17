@@ -14,7 +14,7 @@ import FPath.AbsDir  ( AbsDir )
 
 -- monadio-plus ------------------------
 
-import MonadIO.Directory  ( GlobPCRERegex )
+import MonadIO.Directory  ( GlobPCRERegex, HasGlobPCRERegex( globPCRERegex ) )
 
 -- time --------------------------------
 
@@ -34,7 +34,6 @@ import LogPlus.Compressor             ( Compressor
                                        , compressPzstd
                                        )
 import LogPlus.FilenameGenerator      ( FilenameGenerator( filenameGenerator ) )
-import LogPlus.GlobPCRERegex          ( HasGlobPCRERegex( globPCRERegex ) )
 import LogPlus.MaxFiles               ( HasMaxFiles( maxFiles )
                                        , MaxFiles )
 import LogPlus.Perms                  ( HasPerms( perms ) )
