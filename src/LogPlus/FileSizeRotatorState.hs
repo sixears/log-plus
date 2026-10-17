@@ -10,6 +10,7 @@ import BasePlus.New  ( New( new ) )
 
 -- monadio-plus ------------------------
 
+import MonadIO.FileSize     ( FileSize, HasFileSize( fileSize ) )
 import MonadIO.NamedHandle  ( ℍ )
 
 ------------------------------------------------------------
@@ -19,7 +20,6 @@ import MonadIO.NamedHandle  ( ℍ )
 import LogPlus.CompressorThread  ( CompressorThread
                                  , HasCompressorThreadMay(compressorThreadMay) )
 import LogPlus.HMay              ( HasℍMay( 𝕙May ) )
-import LogPlus.SizeBytes         ( SizeBytes, HasSizeBytes( sizeBytes ) )
 
 --------------------------------------------------------------------------------
 
@@ -29,7 +29,7 @@ data FileSizeRotatorState =
   FileSizeRotatorState { -- ^ current filehandle to which logs are being written
                          _fsrst_handle  ∷ 𝕄 ℍ
                        , -- ^ size of the file that we are writing to
-                         _fsrst_size    ∷ SizeBytes
+                         _fsrst_size    ∷ FileSize
                        , -- ^ thread of the last compressor that we kicked off
                          _fsrst_cmpthrd ∷ 𝕄 CompressorThread
                        }
@@ -46,8 +46,8 @@ instance HasℍMay FileSizeRotatorState where
 
 ----------
 
-instance HasSizeBytes FileSizeRotatorState where
-  sizeBytes = lens _fsrst_size (\ f s → f { _fsrst_size = s })
+instance HasFileSize FileSizeRotatorState where
+  fileSize = lens _fsrst_size (\ f s → f { _fsrst_size = s })
 
 ----------
 
@@ -56,12 +56,12 @@ instance HasCompressorThreadMay FileSizeRotatorState where
 
 ----------
 
-instance New FileSizeRotatorState (𝕄 ℍ,  SizeBytes,𝕄 CompressorThread) where
+instance New FileSizeRotatorState (𝕄 ℍ, FileSize, 𝕄 CompressorThread) where
   new (h,s,t) = FileSizeRotatorState h s t
 
 ----------
 
-instance New FileSizeRotatorState (ℍ,  SizeBytes,𝕄 CompressorThread) where
+instance New FileSizeRotatorState (ℍ, FileSize,𝕄 CompressorThread) where
   new (h,s,t) = FileSizeRotatorState (𝓙 h) s t
 
 -- that's all, folks! ----------------------------------------------------------

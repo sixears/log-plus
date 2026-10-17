@@ -18,7 +18,8 @@ import Prelude.Unicode  ( (×) )
 
 -- monadio-plus ------------------------
 
-import MonadIO.FileMode   ( HasFileMode( fileMode ) )
+import MonadIO.FileMode  ( HasFileMode( fileMode ) )
+import MonadIO.FileSize  ( HasMaxFileSize( maxFileSize ), MaxFileSize )
 
 -- unix --------------------------------
 
@@ -34,8 +35,6 @@ import LogPlus.Compressor                ( Compressor
                                          )
 import LogPlus.FilenameGenerator         ( FilenameGenerator(filenameGenerator) )
 import LogPlus.MaxFiles                  ( HasMaxFiles( maxFiles ), MaxFiles )
-import LogPlus.MaxFileSize               ( HasMaxFileSize( maxFileSize )
-                                         , MaxFileSize )
 import LogPlus.NumberedFilenameGenerator ( NumberedFilenameGenerator
                                          , NumberedFnGen
                                          , simpleNumberedFilenameGenerator

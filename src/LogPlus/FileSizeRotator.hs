@@ -33,6 +33,7 @@ import MonadError.IO.Error  ( IOError )
 -- monadio-plus ------------------------
 
 import MonadIO.FileMode     ( fileMode )
+import MonadIO.FileSize     ( FileSize, maxFileSize, fileSize )
 import MonadIO.NamedHandle  ( HEncoding( NoEncoding ), ℍ
                             , handle, hClose )
 import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
@@ -54,8 +55,6 @@ import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
 import LogPlus.FileSizeRotatorState    ( FileSizeRotatorState )
 import LogPlus.HMay                    ( 𝕙May )
 import LogPlus.MaxFiles                ( MaxFiles )
-import LogPlus.MaxFileSize             ( maxFileSize )
-import LogPlus.SizeBytes               ( SizeBytes, sizeBytes )
 
 --------------------------------------------------------------------------------
 
@@ -74,8 +73,8 @@ fileSizeRotator ∷ ∀ ω μ . MonadIO μ =>
 
 fileSizeRotator opts fn st_ _sds t = do
   let st          = st_ ⧏ def
-      l           = new @SizeBytes @Word64 (ɨ $ щ t) -- length of t
-      bytes_would = (st ⊣ sizeBytes) + l
+      l           = new @FileSize @Word64 (ɨ $ щ t) -- length of t
+      bytes_would = (st ⊣ fileSize) + l
       -- create a new handle, return a thread reference for the compressor if
       -- used to compress the old one
       mkhandle    ∷ μ (ℍ, 𝕄 CompressorThread)
@@ -98,9 +97,9 @@ fileSizeRotator opts fn st_ _sds t = do
     𝓙 𝕙 → if and [ -- no extant thread
                    thread_is_running ≠ ThreadIsRunning
                  , -- we don't want empty files
-                   (st ⊣ sizeBytes) ≠ 0
+                   (st ⊣ fileSize) ≠ 0
                  , -- extant file too big
-                   bytes_would > opts ⊣ maxFileSize ∘ sizeBytes
+                   bytes_would > opts ⊣ maxFileSize ∘ fileSize
                  ]
           then do -- time to make a new handle
             hClose 𝕙
@@ -110,10 +109,10 @@ fileSizeRotator opts fn st_ _sds t = do
             if and [ thread_is_running ≡ ThreadIsNotRunning
                    , isJust $ st ⊣ compressorThreadMay ]
             then -- update bytes written; and dump the thread (it's now done)
-                 return (𝕙 ⊣ handle,st & sizeBytes           ⊢ bytes_would
+                 return (𝕙 ⊣ handle,st & fileSize            ⊢ bytes_would
                                        & compressorThreadMay ⊢ 𝓝)
             else -- just update the bytes written
-                 return (𝕙 ⊣ handle,st & sizeBytes ⊢ bytes_would)
+                 return (𝕙 ⊣ handle,st & fileSize ⊢ bytes_would)
 
     𝓝   → -- no extant handle, so create one
            mkhandle ≫ \ (𝕙',ṯ) → return (𝕙' ⊣ handle, new (𝕙',l,ṯ))

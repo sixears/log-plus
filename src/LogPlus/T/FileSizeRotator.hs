@@ -40,6 +40,7 @@ import MonadError.IO.Error  ( IOError )
 -- monadio-plus ------------------------
 
 import MonadIO.Directory  ( directoryList, inDir )
+import MonadIO.FileSize   ( maxFileSize )
 import MonadIO.Temp       ( __progNamePrefix__, __tempdir__, testsWithTempDir'')
 
 -- tasty -------------------------------
@@ -59,7 +60,6 @@ import LogPlus                  ( logToFiles', warnT )
 import LogPlus.Compressor       ( Compressor, compressorMay, compressPzstd )
 import LogPlus.FileSizeRotator  ( fileSizeRotator )
 import LogPlus.MaxFiles         ( MaxFiles, maxFiles )
-import LogPlus.MaxFileSize      ( maxFileSize )
 
 --------------------------------------------------------------------------------
 

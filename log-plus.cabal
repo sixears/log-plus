@@ -36,11 +36,9 @@ library
                     , LogPlus.LogRender
                     , LogPlus.LogTransformer
                     , LogPlus.MaxFiles
-                    , LogPlus.MaxFileSize
                     , LogPlus.NumberedFilenameGenerator
                     , LogPlus.Paths
                     , LogPlus.Render
-                    , LogPlus.SizeBytes
                     , LogPlus.TimeFilenameGenerator
                     , LogPlus.ToDoc_
 
