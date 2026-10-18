@@ -45,7 +45,7 @@ import MonadError.IO.Error  ( IOError )
 import MonadIO.File         ( unlink )
 import MonadIO.FileMode     ( fileMode )
 import MonadIO.NamedHandle  ( HEncoding( NoEncoding ), ℍ
-                            , handle, hClose, hname )
+                            , handle, hClose, hname, 𝕙May )
 import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
 
 -- time --------------------------------
@@ -63,7 +63,6 @@ import LogPlus.CompressorThread        ( CompressorThread, asyncCompressorThread
 import LogPlus.FilenameGenerator       ( FilenameGenerator( filenameGenerator ))
 import LogPlus.FileTimeRotatorOptions  ( FileTimeRotatorOptions )
 import LogPlus.FileTimeRotatorState    ( FileTimeRotatorState )
-import LogPlus.HMay                    ( 𝕙May )
 
 --------------------------------------------------------------------------------
 

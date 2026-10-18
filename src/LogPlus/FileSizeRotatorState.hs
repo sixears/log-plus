@@ -11,7 +11,7 @@ import BasePlus.New  ( New( new ) )
 -- monadio-plus ------------------------
 
 import MonadIO.FileSize     ( FileSize, HasFileSize( fileSize ) )
-import MonadIO.NamedHandle  ( ℍ )
+import MonadIO.NamedHandle  ( HasNamedHandleMay( namedHandleMay ), ℍ )
 
 ------------------------------------------------------------
 --                     local imports                      --
@@ -19,7 +19,6 @@ import MonadIO.NamedHandle  ( ℍ )
 
 import LogPlus.CompressorThread  ( CompressorThread
                                  , HasCompressorThreadMay(compressorThreadMay) )
-import LogPlus.HMay              ( HasℍMay( 𝕙May ) )
 
 --------------------------------------------------------------------------------
 
@@ -41,8 +40,8 @@ instance Default FileSizeRotatorState where def = FileSizeRotatorState 𝓝 0 �
 
 ----------
 
-instance HasℍMay FileSizeRotatorState where
-  𝕙May = lens _fsrst_handle (\ f h → f { _fsrst_handle = h })
+instance HasNamedHandleMay FileSizeRotatorState where
+  namedHandleMay = lens _fsrst_handle (\ f h → f { _fsrst_handle = h })
 
 ----------
 

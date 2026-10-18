@@ -31,7 +31,6 @@ library
                     , LogPlus.FileTimeRotator
                     , LogPlus.FileTimeRotatorOptions
                     , LogPlus.FileTimeRotatorState
-                    , LogPlus.HMay
                     , LogPlus.Log
                     , LogPlus.LogRender
                     , LogPlus.LogTransformer

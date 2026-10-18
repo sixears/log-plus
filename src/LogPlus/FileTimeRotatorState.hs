@@ -10,7 +10,7 @@ import BasePlus.New  ( New( new ) )
 
 -- monadio-plus ------------------------
 
-import MonadIO.NamedHandle  ( ℍ )
+import MonadIO.NamedHandle  ( HasNamedHandleMay( namedHandleMay ), ℍ )
 
 ------------------------------------------------------------
 --                     local imports                      --
@@ -18,7 +18,6 @@ import MonadIO.NamedHandle  ( ℍ )
 
 import LogPlus.CompressorThread  ( CompressorThread
                                  , HasCompressorThreadMay(compressorThreadMay) )
-import LogPlus.HMay              ( HasℍMay( 𝕙May ) )
 
 --------------------------------------------------------------------------------
 
@@ -38,8 +37,8 @@ instance Default FileTimeRotatorState where def = FileTimeRotatorState 𝓝 𝓝
 
 ----------
 
-instance HasℍMay FileTimeRotatorState where
-  𝕙May = lens _ftrst_handle (\ f h → f { _ftrst_handle = h })
+instance HasNamedHandleMay FileTimeRotatorState where
+  namedHandleMay = lens _ftrst_handle (\ f h → f { _ftrst_handle = h })
 
 ----------
 

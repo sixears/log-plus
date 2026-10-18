@@ -35,7 +35,7 @@ import MonadError.IO.Error  ( IOError )
 import MonadIO.FileMode     ( fileMode )
 import MonadIO.FileSize     ( FileSize, maxFileSize, fileSize )
 import MonadIO.NamedHandle  ( HEncoding( NoEncoding ), ℍ
-                            , handle, hClose )
+                            , handle, hClose, 𝕙May )
 import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
 
 -- natural -----------------------------
@@ -53,7 +53,6 @@ import LogPlus.CompressorThread        ( CompressorThread, compressorThreadMay
 import LogPlus.FilenameGenerator       ( FilenameGenerator( filenameGenerator ))
 import LogPlus.FileSizeRotatorOptions  ( FileSizeRotatorOptions )
 import LogPlus.FileSizeRotatorState    ( FileSizeRotatorState )
-import LogPlus.HMay                    ( 𝕙May )
 import LogPlus.MaxFiles                ( MaxFiles )
 
 --------------------------------------------------------------------------------
