@@ -32,6 +32,7 @@ import Natural  ( (⊟) )
 
 import qualified FPath.File
 
+import FPath.AbsDir            ( HasAbsDir( absDir ) )
 import FPath.AbsFile           ( AbsFile )
 import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
 import FPath.FilenameExtension ( FilenameExtension
@@ -69,14 +70,7 @@ import Safe  ( lastMay, tailSafe )
 --                     local imports                       -
 ------------------------------------------------------------
 
-import LogPlus.AbsDir             ( HasAbsDir( absDir_ ) )
 import LogPlus.CompressorIO       ( CompressorIO,HasCompressorIO(compressorIO) )
-{-
-import LogPlus.FilenameExtension  ( FilenameExtension
-                                  , HasFilenameExtension( filenameExtension
-                                                        , filenameExtensionPC )
-                                  , appendExtension )
--}
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ))
 import LogPlus.MaxFiles           ( MaxFiles, HasMaxFiles(maxFiles, maxFiles16))
 
@@ -201,7 +195,7 @@ fileCompressClean ∷ ∀ ε φ μ .
 fileCompressClean opts = do
   let compress    = opts ⊣ compressorMay
       max_files   = opts ⊣ maxFiles
-  (fes,des,errs) ← glob (opts ⊣ globPCRERegex) (opts ⊣ absDir_)
+  (fes,des,errs) ← glob (opts ⊣ globPCRERegex) (opts ⊣ absDir)
   forM_ des $ \ (d,_st) → liftIO $ do
     stdErrT $ [fmt|Log compress/clean: ignoring globbed directory: %T|] d
   forM_ errs $ \ (f∷AbsFile,e∷FPathIOError) → liftIO $ do

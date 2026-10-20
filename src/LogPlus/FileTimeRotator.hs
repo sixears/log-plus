@@ -24,6 +24,7 @@ import Data.Eq.Unicode  ( (≠) )
 -- fpath -------------------------------
 
 import FPath                   ( (⫻) )
+import FPath.AbsDir            ( absDir )
 import FPath.AbsFile           ( AbsFile )
 import FPath.Basename          ( basename )
 import FPath.Error.FPathError  ( FPathIOError )
@@ -56,7 +57,6 @@ import Data.Time.Clock  ( UTCTime, getCurrentTime )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import LogPlus.AbsDir                  ( absDir_ )
 import LogPlus.Compressor              ( fileCompressClean )
 import LogPlus.CompressorThread        ( CompressorThread, asyncCompressorThread
                                        , compressorThreadMay )
@@ -106,7 +106,7 @@ fileTimeRotator_ opts pc_ d st_ _sds _t = do
       -- type sig required to disambiguate
       pc' ∷ PathComponent
       pc' = (filenameGenerator opts) pc_ d
-      fn = opts ⊣ absDir_ ⫻ pc' ⊣ re _RelFile_
+      fn = opts ⊣ absDir ⫻ pc' ⊣ re _RelFile_
       cur_pc = basename ∘ view hname ⊳ (st ⊣ 𝕙May) ≫ (⩼ _RelFile_)
 
       mkhandle    ∷ AbsFile → μ (ℍ, 𝕄 CompressorThread)

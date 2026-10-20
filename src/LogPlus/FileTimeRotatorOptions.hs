@@ -10,7 +10,7 @@ import BasePlus.New  ( New( new ) )
 
 -- fpath -------------------------------
 
-import FPath.AbsDir  ( AbsDir )
+import FPath.AbsDir  ( AbsDir, HasAbsDir( absDir ) )
 
 -- monadio-plus ------------------------
 
@@ -29,14 +29,13 @@ import System.Posix.Types  ( FileMode )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import LogPlus.AbsDir                 ( HasAbsDir( absDir_ ) )
 import LogPlus.Compressor             ( Compressor
-                                       , HasCompressorMay( compressorMay )
-                                       , compressPzstd
-                                       )
+                                      , HasCompressorMay( compressorMay )
+                                      , compressPzstd
+                                      )
 import LogPlus.FilenameGenerator      ( FilenameGenerator( filenameGenerator ) )
 import LogPlus.MaxFiles               ( HasMaxFiles( maxFiles )
-                                       , MaxFiles )
+                                      , MaxFiles )
 import LogPlus.TimeFilenameGenerator  ( TimeFilenameGenerator, TimeFnGen
                                       , dayFilenameGenerator )
 
@@ -103,7 +102,7 @@ instance FilenameGenerator (FileTimeRotatorOptions τ) (TimeFnGen τ) where
 ----------
 
 instance HasAbsDir (FileTimeRotatorOptions τ) where
-  absDir_ = lens _ftro_dir (\ o d → o { _ftro_dir = d })
+  absDir = lens _ftro_dir (\ o d → o { _ftro_dir = d })
 
 ----------
 
