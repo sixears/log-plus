@@ -23,7 +23,6 @@ library
                     , LogPlus.Compressor
                     , LogPlus.CompressorIO
                     , LogPlus.CompressorThread
-                    , LogPlus.FilenameExtension
                     , LogPlus.FilenameGenerator
                     , LogPlus.FileSizeRotator
                     , LogPlus.FileSizeRotatorOptions

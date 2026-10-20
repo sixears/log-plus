@@ -14,10 +14,10 @@ import BasePlus.New  ( New( new ) )
 
 -- fpath -------------------------------
 
-import FPath.AbsFile        ( AbsFile )
-import FPath.FileLike       ( (⊙) )
-import FPath.Parseable      ( __parseS__ )
-import FPath.PathComponent  ( PathComponent )
+import FPath.AbsFile            ( AbsFile )
+import FPath.FileLike           ( (⊙) )
+import FPath.FilenameExtension  ( FilenameExtension )
+import FPath.Parseable          ( __parseS__ )
 
 -- natural -----------------------------
 
@@ -65,10 +65,7 @@ instance FilenameGenerator NumberedFilenameGenerator NumberedFnGen where
 simpleNumberedFilenameGenerator ∷ MaxFiles → NumberedFilenameGenerator
 simpleNumberedFilenameGenerator mxf =
   let name_ = "simpleNumberedFilenameGenerator (" ◇ show mxf ◇ ")"
-      parsePC = __parseS__ @PathComponent
--- XXX
---      go_ ∷ (FileLike α, HasMaxFiles β) => α → 𝕄 β → α
---      go_ ∷ (HasMaxFiles β) => PathComponent → 𝕄 β → PathComponent
+      parseFE = __parseS__ @FilenameExtension
       go_ ∷ (HasMaxFiles β) => AbsFile → 𝕄 β → AbsFile
       go_ fn 𝓝    = fn
       go_ fn (𝓙 i) =
@@ -86,7 +83,7 @@ simpleNumberedFilenameGenerator mxf =
             -- -1 because we start counting at '0'
             num = padNumber (numDigits $ (mxf ⊣ maxFiles16) - 1)
 
-        in  (fn ⊙) ∘ parsePC ∘ num $ fromIntegral (i ⊣ maxFiles16)
+        in  (fn ⊙) ∘ parseFE ∘ num $ fromIntegral (i ⊣ maxFiles16)
 
   in  new @NumberedFilenameGenerator @(𝕊,NumberedFnGen) (name_,go_)
 

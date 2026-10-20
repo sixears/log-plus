@@ -32,9 +32,14 @@ import Natural  ( (⊟) )
 
 import qualified FPath.File
 
-import FPath.AbsFile        ( AbsFile )
+import FPath.AbsFile           ( AbsFile )
 import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
-import FPath.PathComponent  ( pc )
+import FPath.FilenameExtension ( FilenameExtension
+                               , HasFilenameExtension( filenameExtension
+                                                     , filenameExtensionPC )
+                               )
+import FPath.FileLike          ( addExt )
+import FPath.PathComponent     ( pc )
 
 -- lens --------------------------------
 
@@ -66,10 +71,12 @@ import Safe  ( lastMay, tailSafe )
 
 import LogPlus.AbsDir             ( HasAbsDir( absDir_ ) )
 import LogPlus.CompressorIO       ( CompressorIO,HasCompressorIO(compressorIO) )
+{-
 import LogPlus.FilenameExtension  ( FilenameExtension
                                   , HasFilenameExtension( filenameExtension
                                                         , filenameExtensionPC )
                                   , appendExtension )
+-}
 import LogPlus.FilenameGenerator  ( FilenameGenerator( filenameGenerator ))
 import LogPlus.MaxFiles           ( MaxFiles, HasMaxFiles(maxFiles, maxFiles16))
 
@@ -152,11 +159,12 @@ fileNumberedMoves ∷ ∀ φ μ .
                      FilenameGenerator φ (AbsFile → 𝕄 MaxFiles → AbsFile)) =>
                     AbsFile → φ → 𝕄 ℍ → μ [(AbsFile, AbsFile, 𝕄 Compressor)]
 fileNumberedMoves fn opts ɦ =
-  let compress    = opts ⊣ compressorMay
-      fngen       ∷ AbsFile → 𝕄 MaxFiles → AbsFile -- XXX
+  let compress    ∷ 𝕄 Compressor
+      compress    = opts ⊣ compressorMay
+      fngen       ∷ AbsFile → 𝕄 MaxFiles → AbsFile
       fngen       = filenameGenerator opts
       max_files   = opts ⊣ maxFiles
-      fngen' i    = maybe id appendExtension compress $ fngen fn i
+      fngen' i    = maybe id (flip addExt) compress $ fngen fn i
       fn_nums     = 𝓙 ⊳ [0..(max_files-1)] -- -1 because we start at 0
       fn_pairs    = (over both fngen') ⊳ zip fn_nums (tailSafe fn_nums)
       abs_hname h =

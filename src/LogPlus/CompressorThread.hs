@@ -17,8 +17,9 @@ import BasePlus.New     ( New( new ) )
 
 -- fpath -------------------------------
 
-import FPath.AbsFile   ( AbsFile )
-import FPath.FileLike  ( (⊙) )
+import FPath.AbsFile            ( AbsFile )
+import FPath.FileLike           ( (⊙) )
+import FPath.FilenameExtension  ( HasFilenameExtension( filenameExtension ) )
 
 -- monaderror-io -----------------------
 
@@ -37,9 +38,8 @@ import System.Posix.Types  ( FileMode )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import LogPlus.Compressor         ( Compressor )
-import LogPlus.CompressorIO       ( HasCompressorIO( compressorIOF ) )
-import LogPlus.FilenameExtension  ( HasFilenameExtension( filenameExtensionPC ))
+import LogPlus.Compressor    ( Compressor )
+import LogPlus.CompressorIO  ( HasCompressorIO( compressorIOF ) )
 
 --------------------------------------------------------------------------------
 
@@ -96,7 +96,7 @@ asyncCompressorThread c file_perms to = liftIO $
   let c' ∷ AbsFile → AbsFile → IO ()
       c' = \ from_ to_ → do (c ⊣ compressorIOF) from_ to_
                             ж $ chmod @IOError file_perms to_
-      ext = c ⊣ filenameExtensionPC
+      ext = c ⊣ filenameExtension
   in  new ⊳ async (c' to (to⊙ext))
 
 -- that's all, folks! ----------------------------------------------------------
