@@ -81,7 +81,7 @@ fileSizeRotatorTests =
                                       , flushMaxQueueSize = 1
                                       }
         -- we need to turn off batching here for predictable results
-        logToFiles' (𝓙 bopts) [] [] rot $ mapM_ (warnT @())
+        logToFiles' 𝓝 (𝓙 bopts) [] [] rot $ mapM_ (warnT @())
                     [ "deleted??" -- this should get rotated away into the ether
                     , "123" -- each line gets a '\n' added, so that's four bytes
                     , "456" -- +4 => 8

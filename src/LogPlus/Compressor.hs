@@ -9,7 +9,7 @@ import Prelude  ( error )
 
 -- base --------------------------------
 
-import Data.List   ( sort, zip )
+import Data.List   ( filter, sort, zip )
 import Data.Tuple  ( uncurry )
 
 -- base-plus ---------------------------
@@ -22,11 +22,7 @@ import BasePlus.StdErr  ( eToStderrIO, stdErrT )
 
 -- extra -------------------------------
 
-import Data.List.Extra  ( dropEnd )
-
--- natural -----------------------------
-
-import Natural  ( (⊟) )
+import Data.List.Extra  ( dropEnd, takeEnd )
 
 -- fpath -------------------------------
 
@@ -38,9 +34,10 @@ import FPath.Error.FPathError  ( AsFPathError, FPathIOError )
 import FPath.FilenameExtension ( FilenameExtension
                                , HasFilenameExtension( filenameExtension
                                                      , filenameExtensionPC )
+                               , filenameExtensionMay
                                )
-import FPath.FileLike          ( addExt )
-import FPath.PathComponent     ( pc )
+import FPath.FileLike          ( addExt, file )
+import FPath.PathComponent     ( PathComponent, pc )
 
 -- lens --------------------------------
 
@@ -62,9 +59,17 @@ import MonadIO.NamedHandle            ( ℍ, hname )
 import MonadIO.Process                ( doProc )
 import MonadIO.Process.CmdSpec        ( mkCmd )
 
+-- mono-traversable --------------------
+
+import Data.MonoTraversable  ( otoList )
+
+-- natural -----------------------------
+
+import Natural  ( (⊟) )
+
 -- safe --------------------------------
 
-import Safe  ( lastMay, tailSafe )
+import Safe  ( tailSafe )
 
 ------------------------------------------------------------
 --                     local imports                       -
@@ -183,6 +188,12 @@ fileNumberedMoves fn opts ɦ =
 
     This doesn't actually perform any destructive IO (just some `stat`s and
     directory reads); rather it provides a list of instructions.
+
+    **N.B.** this function doesn't account for any in-flight compressing, so
+    best not to call it while there is an ongoing compression.  I mean, it's a
+    passive function, so it's not directly harmful: but it may make unwise
+    suggestions about what to remove and/or compress if there is a compression
+    on-the-go.
 -}
 
 -- XXX how are we checking for which files need compressing?
@@ -191,19 +202,47 @@ fileCompressClean ∷ ∀ ε φ μ .
                     (MonadIO μ, AsIOError ε, AsFPathError ε, MonadError ε μ,
                      HasMaxFiles φ, HasGlobPCRERegex φ, HasAbsDir φ,
                      HasCompressorMay φ) =>
-                    φ → μ (𝕄 (AbsFile, Compressor), [AbsFile])
-fileCompressClean opts = do
+                    PathComponent -- ^ name of the current file being written to;
+                                  --   used to ignore this and any later files
+                                  --   when considering candidates for
+                                  --   compression
+                  → φ → μ (𝕄 (AbsFile, Compressor), [AbsFile])
+fileCompressClean ṗċ opts = do
   let compress    = opts ⊣ compressorMay
       max_files   = opts ⊣ maxFiles
+  -- fes,des are [(Abs{File,Dir},FStat)] respectively;
+  -- errs is [(AbsFile, FPathIOError)]
   (fes,des,errs) ← glob (opts ⊣ globPCRERegex) (opts ⊣ absDir)
+
   forM_ des $ \ (d,_st) → liftIO $ do
     stdErrT $ [fmt|Log compress/clean: ignoring globbed directory: %T|] d
   forM_ errs $ \ (f∷AbsFile,e∷FPathIOError) → liftIO $ do
     stdErrT $ [fmt|Log compress/clean: failed to read '%T': %T|] f e
-  let fns    ∷ [AbsFile] = sort (fst ⊳ fes) -- the oldest is listed first
-      rms    ∷ [AbsFile] = -- ⊟ 1 to account for the file we're about to write
-        dropEnd (fromIntegral $ (max_files ⊣ maxFiles16)⊟1) fns
-      cmprss ∷ 𝕄 (AbsFile, Compressor) = (,) ⊳ lastMay fns ⊵ compress
-  return (cmprss, rms)
+
+  let -- Filter for files newer than being currently written; these are
+      -- presumably detritus from elsewhere, but we don't consider them eligible
+      -- for cleanup/compression until they're in writing range.  How did we end
+      -- up with log files *newer* than the current time?  Who knows, but let's
+      -- not touch them at least until they're properly in our way (once they're
+      -- in range; we'll append to them (normal logs) and/or overwrite them
+      -- (compressed logs)).
+      too_new f = (toText ⊳ last (otoList f)) ≥ (𝓙 $ toText ṗċ)
+      -- Drop from fns the number of files to keep; leaving the rest to be
+      -- deleted.  ⊟ 1 to account for the file we're about to write.
+      drop_count = fromIntegral $ (max_files ⊣ maxFiles16) ⊟ 1
+      fns        = sort (filter (ﬧ ∘ too_new) (fst ⊳ fes)) -- oldest comes first
+      rms        = dropEnd drop_count fns
+      keeps      = takeEnd drop_count fns
+      cmprs  ∷ 𝕄 (AbsFile, Compressor) =
+        let isCompressed ∷ Compressor → AbsFile → 𝔹
+            isCompressed c f = -- judge if a file is compressed by the extension
+              𝓙 (c ⊣ filenameExtension) ≡ f ⊣ file ∘ filenameExtensionMay
+        in case compress of
+              𝓝 → 𝓝
+              𝓙 c → case filter (ﬧ ∘ isCompressed c) keeps of
+                      []    → 𝓝
+                      (f:_) → 𝓙 (f,c)
+
+  return (cmprs, rms)
 
 -- that's all, folks! ----------------------------------------------------------

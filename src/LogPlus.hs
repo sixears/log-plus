@@ -450,20 +450,21 @@ withSimpleHandler renderT pw fd hWrite entryToDoc =
 {-| Write a Log to a filehandle, with given rendering and options.
     The handle is created by a generator function, which may keep state.
 -}
-logToHandles ∷ ∀ α σ ρ ω μ  . (MonadIO μ, MonadMask μ) =>
-               (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (Handle, σ))
-               -- ^ handle generator
-             → (SimpleDocStream ρ → 𝕋)
-             → (LogEntry ω → 𝕄 (Doc ρ)) -- ^ render a LogEntry
-             → 𝕄 BatchingOptions
-             → PageWidth
-             → LoggingT (Log ω) μ α
-             → μ (α,σ)
+logToHandles' ∷ ∀ α σ ρ ω μ  . (MonadIO μ, MonadMask μ) =>
+                𝕄 σ
+              → (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (Handle, σ))
+                -- ^ handle generator
+              → (SimpleDocStream ρ → 𝕋)
+              → (LogEntry ω → 𝕄 (Doc ρ)) -- ^ render a LogEntry
+              → 𝕄 BatchingOptions
+              → PageWidth
+              → LoggingT (Log ω) μ α
+              → μ (α,σ)
 
-logToHandles hgen renderT renderEntry mbopts width io = do
+logToHandles' st hgen renderT renderEntry mbopts width io = do
   let renderIO ∷ Handle → 𝕋 → IO ()
       renderIO h t = hPutStr h t ⪼ hFlush h
-  (fh,ṡṫ) ← liftIO $ hgen 𝓝 SEmpty ""
+  (fh,ṡṫ) ← liftIO $ hgen st SEmpty ""
 
   (a,ṣṭ) ← case mbopts of
     𝓝       → (,ṡṫ) ⊳ withSimpleHandler renderT width fh renderIO renderEntry io
@@ -479,11 +480,46 @@ logToHandles hgen renderT renderEntry mbopts width io = do
 
 ----------------------------------------
 
+{-| Write a Log to a filehandle, with given rendering and options.
+    The handle is created by a generator function, which may keep state.
+-}
+logToHandles ∷ ∀ α σ ρ ω μ  . (MonadIO μ, MonadMask μ) =>
+               (𝕄 σ → SimpleDocStream ρ → 𝕋 → IO (Handle, σ))
+               -- ^ handle generator
+             → (SimpleDocStream ρ → 𝕋)
+             → (LogEntry ω → 𝕄 (Doc ρ)) -- ^ render a LogEntry
+             → 𝕄 BatchingOptions
+             → PageWidth
+             → LoggingT (Log ω) μ α
+             → μ (α,σ)
+
+logToHandles hgen renderT renderEntry mbopts width io =
+  logToHandles' 𝓝 hgen renderT renderEntry mbopts width io
+
+----------------------------------------
+
 {-| simple handle generator for use with logToHandles, that always uses a single
     filehandle -}
 staticHandle ∷ ∀ ρ μ . MonadIO μ =>
                Handle → 𝕄 Handle → SimpleDocStream ρ → 𝕋 → μ (Handle,Handle)
 staticHandle h _ _ _ = return (h,h)
+
+----------------------------------------
+
+{-| write a log to a filehandle, generated at need, with given options but no
+    adornments -}
+logToHandlesNoAdornments' ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ) =>
+                            𝕄 σ
+                          → (𝕄 σ→SimpleDocStream AnsiStyle→𝕋→IO (Handle, σ))
+                            -- ^ handle generator
+                          → 𝕄 BatchingOptions
+                          → LogRenderOpts ω
+                          → [LogTransformer ω]
+                          → LoggingT (Log ω) μ α
+                          → μ (α,σ)
+logToHandlesNoAdornments' st hgen bopts lro trx io =
+  logToHandles' st hgen RenderText.renderStrict
+                (renderMapLog' (lroRenderer lro) trx) bopts (lro ⊣ lroWidth) io
 
 ----------------------------------------
 
@@ -578,23 +614,25 @@ logToFile cso trx =
 
 ----------------------------------------
 
+-- XXX change this to use a classic state monad?
 {-| run `io`, logging to rotating files -}
 logToFiles' ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, HasCompressorThreadMay σ) =>
-              𝕄 BatchingOptions
+              𝕄 σ
+            → 𝕄 BatchingOptions
             → [LogR ω]                                               -- ^ trx
             → [LogTransformer ω]                                     -- ^ ls
             → (𝕄 σ → SimpleDocStream AnsiStyle → 𝕋 → IO (Handle, σ))
               -- ^ rt (rotator)
             → LoggingT (Log ω) μ α                                   -- ^ io
-            → μ α
-logToFiles' opts ls trx rt io = do
+            → μ (α,σ)
+logToFiles' st opts ls trx rt io = do
  let lro  = logRenderOpts' ls Unbounded
- (r,st) ← logToHandlesNoAdornments rt opts lro trx io
+ (r,ṡṫ) ← logToHandlesNoAdornments' st rt opts lro trx io
  -- if there's any compressors running, wait for them
- case st ⊣ compressorThreadMay of
+ case ṡṫ ⊣ compressorThreadMay of
    𝓝    → return ()
    𝓙 ct → waitAsync ct
- return r
+ return (r,ṡṫ)
 
 ----------------------------------------
 
@@ -606,7 +644,8 @@ logToFiles ∷ ∀ α ω μ σ . (MonadIO μ, MonadMask μ, HasCompressorThreadM
              -- ^ rt (rotator)
            → LoggingT (Log ω) μ α                                   -- ^ io
            → μ α
-logToFiles = logToFiles' (𝓙 fileBatchingOptions)
+logToFiles ls trx rt =
+  fst ⩺ logToFiles' 𝓝 (𝓙 fileBatchingOptions) ls trx rt
 
 ----------------------------------------
 

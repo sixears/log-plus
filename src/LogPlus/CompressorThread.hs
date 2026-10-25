@@ -17,7 +17,7 @@ import BasePlus.New     ( New( new ) )
 
 -- fpath -------------------------------
 
-import FPath.AbsFile            ( AbsFile )
+import FPath.AbsFile            ( AbsFile, HasAbsFile( absFile ) )
 import FPath.FileLike           ( (⊙) )
 import FPath.FilenameExtension  ( HasFilenameExtension( filenameExtension ) )
 
@@ -43,21 +43,31 @@ import LogPlus.CompressorIO  ( HasCompressorIO( compressorIOF ) )
 
 --------------------------------------------------------------------------------
 
-newtype CompressorThread = CompressorThread { unCompressorThread ∷ Async () }
+data CompressorThread = CompressorThread { _compressorThread ∷ Async ()
+                                         , _fname            ∷ AbsFile
+                                           -- ^ name of the file being
+                                           --   compressed
+                                         }
 
 ----------
 
-instance New CompressorThread (Async ()) where
-  new = CompressorThread
+instance New CompressorThread (Async (), AbsFile) where
+  new (as,fn) = CompressorThread as fn
+
+----------
+
+instance Show CompressorThread where
+  show ct = [fmt|CompressorThread (%T)|] (_fname ct)
 
 ----------
 
 instance HasAsync CompressorThread () where
-  async_ = lens unCompressorThread (const CompressorThread)
+  async_ = lens _compressorThread (\ ct as → ct { _compressorThread = as })
 
 ----------
 
-instance Show CompressorThread where show _ = "CompressorThread"
+instance HasAbsFile CompressorThread where
+  absFile = lens _fname (\ ct fn → ct { _fname = fn })
 
 ------------------------------------------------------------
 
@@ -88,15 +98,18 @@ mvCompress file_perms (from,to,do_compress) = do
 
 ----------------------------------------
 
-{-| spawn a thread that runs a compressor, and fixes up the file permissions
-    after -}
-asyncCompressorThread ∷ (MonadIO μ, HasCompressorIO δ, HasFilenameExtension δ) =>
+{-| Spawn a thread that runs a compressor, and fixes up the file permissions
+    after.  We have to do it like this because most compressors don't allow us
+    to specify the perms of the target file
+ -}
+asyncCompressorThread ∷ (MonadIO μ, HasCompressorIO δ, HasFilenameExtension δ)=>
                         δ → FileMode → AbsFile → μ CompressorThread
-asyncCompressorThread c file_perms to = liftIO $
+asyncCompressorThread c file_perms from = liftIO $ do
   let c' ∷ AbsFile → AbsFile → IO ()
       c' = \ from_ to_ → do (c ⊣ compressorIOF) from_ to_
                             ж $ chmod @IOError file_perms to_
       ext = c ⊣ filenameExtension
-  in  new ⊳ async (c' to (to⊙ext))
+  as ← async (c' from (from⊙ext))
+  return $ CompressorThread as from
 
 -- that's all, folks! ----------------------------------------------------------

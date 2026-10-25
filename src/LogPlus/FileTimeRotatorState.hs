@@ -24,9 +24,9 @@ import LogPlus.CompressorThread  ( CompressorThread
 {-| intermediate state for logging to a file which is rotated by time -}
 
 data FileTimeRotatorState =
-  FileTimeRotatorState { -- ^ current filehandle to which logs are being written
+  FileTimeRotatorState { -- | current filehandle to which logs are being written
                          _ftrst_handle   ∷ 𝕄 ℍ
-                       , -- ^ thread of the last compressor that we kicked off
+                       , -- | thread of the last compressor that we kicked off
                          _ftrst_cmpthrd  ∷ 𝕄 CompressorThread
                        }
   deriving Show

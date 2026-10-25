@@ -47,7 +47,7 @@ import MonadIO.File         ( unlink )
 import MonadIO.FileMode     ( fileMode )
 import MonadIO.NamedHandle  ( HEncoding( NoEncoding ), ℍ
                             , handle, hClose, hname, 𝕙May )
-import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
+import MonadIO.OpenFile     ( FileOpenMode( FileA ), openFile )
 
 -- time --------------------------------
 
@@ -57,7 +57,7 @@ import Data.Time.Clock  ( UTCTime, getCurrentTime )
 --                     local imports                      --
 ------------------------------------------------------------
 
-import LogPlus.Compressor              ( fileCompressClean )
+import LogPlus.Compressor              ( Compressor, fileCompressClean )
 import LogPlus.CompressorThread        ( CompressorThread, asyncCompressorThread
                                        , compressorThreadMay )
 import LogPlus.FilenameGenerator       ( FilenameGenerator( filenameGenerator ))
@@ -79,7 +79,6 @@ import LogPlus.FileTimeRotatorState    ( FileTimeRotatorState )
 -- τ is the time type, e.g. `Data.Time.Clock.UTCTime` or
 -- `Data.Time.LocalTime.LocalTime`
 
--- XXX what happens if we start logging to an extant file?
 -- XXX use EMonad and friends?
 fileTimeRotator_ ∷ ∀ τ ω μ . MonadIO μ =>
                    FileTimeRotatorOptions τ
@@ -99,36 +98,45 @@ fileTimeRotator_ ∷ ∀ τ ω μ . MonadIO μ =>
                  → ω -- ^ SimpleDocStream (unused)
                  → 𝕋 -- ^ rendered text to write (unused)
                  → μ (Handle,FileTimeRotatorState) -- ^ new handle & state
-
-
 fileTimeRotator_ opts pc_ d st_ _sds _t = do
   let st = st_ ⧏ def
       -- type sig required to disambiguate
       pc' ∷ PathComponent
+      -- PathComponent of the file to write to (e.g., logfile-2026-01-01)
       pc' = (filenameGenerator opts) pc_ d
+      -- full path of the file to write to (e.g., /var/log/logfile-2026-01-01)
       fn = opts ⊣ absDir ⫻ pc' ⊣ re _RelFile_
+      -- PathComponent of the file currently being written to (if any)
       cur_pc = basename ∘ view hname ⊳ (st ⊣ 𝕙May) ≫ (⩼ _RelFile_)
 
+      -- open a new file, possibly start compression ¿of the last file?
       mkhandle    ∷ AbsFile → μ (ℍ, 𝕄 CompressorThread)
       mkhandle afn  = do
-        (cmprs,rms) ← ѥ (fileCompressClean opts) ≫ \ case
+        let cmprsCln = fileCompressClean pc' opts
+        -- cmprs is maybe the name of a file to compress, and the compressor to
+        -- use; rms is the file(s) to remove
+        (cmprs ∷ 𝕄 (AbsFile,Compressor),rms ∷ [AbsFile]) ← ѥ cmprsCln ≫ \ case
           𝓡 (cmprs,rms) → return (cmprs,rms)
+          -- in case of error; moan to stderr, but move on
           𝓛 (e ∷ FPathIOError) → do
             stdErrT $ [fmt|error compressing/cleaning old logs: %T|] e
             return (𝓝,[])
+
+        -- delete any files listed for cleaning
         forM_ rms $ \ f → ѥ @IOError (unlink f) ≫ \ case
                             𝓡 () → return ()
                             𝓛 e  → stdErrT $ [fmt|error unlinking %T: %T|] f e
 
+        -- create the compressor, if required, in its own thread
         compressor_thread ← case cmprs of
           𝓝         → return 𝓝
-          𝓙 (fn',c) →
-            𝓙 ⊳ asyncCompressorThread c (opts ⊣ fileMode) fn'
+          𝓙 (fn',c) → 𝓙 ⊳ asyncCompressorThread c (opts ⊣ fileMode) fn'
 
-        let -- open a file, mode 0644, raise if it fails
+        let -- open a file with the specified perms; raise if it fails
             open_file ∷ MonadIO μ => AbsFile → μ ℍ
             open_file =
-              ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ fileMode)
+              ж ∘ openFile @IOError NoEncoding (FileA ∘ 𝓙 $ opts ⊣ fileMode)
+        -- open the new log file
         ẖ ∷ ℍ ← open_file afn
         return (ẖ, compressor_thread)
 
@@ -147,7 +155,7 @@ fileTimeRotator_ opts pc_ d st_ _sds _t = do
             hClose 𝕙
             (𝕙',ṯ) ← mkhandle fn
             return (𝕙' ⊣ handle, new (𝕙',ṯ))
-          else -- just return the extant handle
+          else do -- just return the extant handle
             if and [ thread_is_running ≡ ThreadIsNotRunning
                    , isJust $ st ⊣ compressorThreadMay ]
             then -- dump the thread (it's now done)
@@ -159,6 +167,11 @@ fileTimeRotator_ opts pc_ d st_ _sds _t = do
 
 --------------------
 
+{-| Rotate log files according to time.  This uses the current time, which may
+    marginally deviate from the logging time; but it makes life easier. -}
+-- If we ever want to use the time the log was relly created; we probably need
+-- to explicitly add that to LogEntry, possibly in the attrs or just making the
+-- _timestamp not a `Maybe` - but that messes with purity.
 fileTimeRotator ∷ MonadIO μ =>
                   FileTimeRotatorOptions UTCTime
                 → PathComponent
