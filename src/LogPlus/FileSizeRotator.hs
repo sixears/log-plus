@@ -36,7 +36,7 @@ import MonadIO.FileMode     ( fileMode )
 import MonadIO.FileSize     ( FileSize, maxFileSize, fileSize )
 import MonadIO.NamedHandle  ( HEncoding( NoEncoding ), ℍ
                             , handle, hClose, 𝕙May )
-import MonadIO.OpenFile     ( FileOpenMode( FileW ), openFile )
+import MonadIO.OpenFile     ( FileOpenMode( FileA ), openFile )
 
 -- natural -----------------------------
 
@@ -57,8 +57,6 @@ import LogPlus.MaxFiles                ( MaxFiles )
 
 --------------------------------------------------------------------------------
 
--- XXX what happens if we start logging to an extant file?
--- XXX use EMonad and friends?
 fileSizeRotator ∷ ∀ ω μ . MonadIO μ =>
                   FileSizeRotatorOptions
                 → AbsFile                -- ^ base filename (passed to `fngen`)
@@ -84,7 +82,7 @@ fileSizeRotator opts fn st_ _sds t = do
         let -- open a file, mode 0644, raise if it fails
             open_file ∷ MonadIO μ => AbsFile → μ ℍ
             open_file =
-              ж ∘ openFile @IOError NoEncoding (FileW ∘ 𝓙 $ opts ⊣ fileMode)
+              ж ∘ openFile @IOError NoEncoding (FileA ∘ 𝓙 $ opts ⊣ fileMode)
         ẖ ∷ ℍ ← open_file ((filenameGenerator opts) fn (𝓝∷𝕄 MaxFiles))
         return (ẖ, compressor_thread)
 

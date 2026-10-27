@@ -145,13 +145,18 @@ compressPzstd =
 
 ----------------------------------------
 
+{-| look to see if a file is compressed with the given compressor; judging
+    by the file extension -}
+isCompressed ∷ Compressor → AbsFile → 𝔹
+isCompressed c f = 𝓙 (c ⊣ filenameExtension) ≡ f ⊣ file ∘ filenameExtensionMay
+
+----------------------------------------
+
 {-| List of moves (and potentially compresses) to perform for numbered file
     rotation; this accounts for actual file existence.  This doesn't actually
     perform any destructive IO (just some `stat`s); rather provides a list of
     instructions.
 -}
--- XXX how are we checking for which files need compressing?
--- XXX use EMonad and friends?
 
 fileNumberedMoves ∷ ∀ φ μ .
                     (MonadIO μ, HasMaxFiles φ, HasCompressorMay φ,
@@ -176,8 +181,8 @@ fileNumberedMoves fn opts ɦ =
       -- on whether they actually exist
       -- only compress when making the first archive file
       proto_moves = init_fnpair : (uncurry (,,𝓝) ⊳ (fn_pairs))
-  in  flip takeWhileM proto_moves $ \ (from,_to,_do_compress) →
-                                    (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
+  in  flip takeWhileM proto_moves $
+        \ (from,_to,_do_compress) → (≡ 𝓙 FExists) ⊳⊳ ꙝ @IOError $ lfexists from
 
 ----------------------------------------
 
@@ -195,9 +200,6 @@ fileNumberedMoves fn opts ɦ =
     suggestions about what to remove and/or compress if there is a compression
     on-the-go.
 -}
-
--- XXX how are we checking for which files need compressing?
--- XXX use EMonad and friends?
 fileCompressClean ∷ ∀ ε φ μ .
                     (MonadIO μ, AsIOError ε, AsFPathError ε, MonadError ε μ,
                      HasMaxFiles φ, HasGlobPCRERegex φ, HasAbsDir φ,
@@ -234,14 +236,10 @@ fileCompressClean ṗċ opts = do
       rms        = dropEnd drop_count fns
       keeps      = takeEnd drop_count fns
       cmprs  ∷ 𝕄 (AbsFile, Compressor) =
-        let isCompressed ∷ Compressor → AbsFile → 𝔹
-            isCompressed c f = -- judge if a file is compressed by the extension
-              𝓙 (c ⊣ filenameExtension) ≡ f ⊣ file ∘ filenameExtensionMay
-        in case compress of
-              𝓝 → 𝓝
-              𝓙 c → case filter (ﬧ ∘ isCompressed c) keeps of
-                      []    → 𝓝
-                      (f:_) → 𝓙 (f,c)
+        case compress of 𝓝 → 𝓝
+                         𝓙 c → case filter (ﬧ ∘ isCompressed c) keeps of
+                                 []    → 𝓝
+                                 (f:_) → 𝓙 (f,c)
 
   return (cmprs, rms)
 

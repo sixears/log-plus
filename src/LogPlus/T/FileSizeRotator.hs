@@ -39,8 +39,9 @@ import MonadError.IO.Error  ( IOError )
 
 -- monadio-plus ------------------------
 
-import MonadIO.Directory  ( directoryList, inDir )
+import MonadIO.Directory  ( directoryList, inDir, listdirStdOut )
 import MonadIO.FileSize   ( maxFileSize )
+import MonadIO.OpenFile   ( readFileUTF8Lenient )
 import MonadIO.Temp       ( __progNamePrefix__, __tempdir__, testsWithTempDir'')
 
 -- tasty -------------------------------
@@ -50,6 +51,11 @@ import Test.Tasty  ( DependencyType( AllSucceed ), dependentTestGroup )
 -- tasty-hunit -------------------------
 
 import Test.Tasty.HUnit  ( assertEqual, assertFailure )
+
+-- text --------------------------------
+
+import qualified  Data.Text     as  T
+import qualified  Data.Text.IO  as  TIO
 
 ------------------------------------------------------------
 --                     local imports                      --
@@ -65,7 +71,20 @@ import LogPlus.MaxFiles         ( MaxFiles, maxFiles )
 
 fileSizeRotatorTests ∷ TestTree
 fileSizeRotatorTests =
-  let nil       = const $ return ()
+  let list_dirs = 𝓕 -- set to 𝓣 to list the contents of the written dir
+      cat_files = 𝓕 -- set to 𝓣 to cat the written files
+
+      cat_file fn = ("cat " ◇ toString fn, \ (_,_) → do
+                     ѥ (readFileUTF8Lenient @IOError fn) ≫ \ case
+                       𝓛 e → liftIO $ assertFailure (show e)
+                       𝓡 t → liftIO $ do
+                         TIO.putStrLn ("---- " ◇ T.pack (show fn) ◇ "----")
+                         TIO.putStrLn t
+                         TIO.putStrLn "----"
+                         assertSuccess ("cat" ◇ toText fn)
+                    )
+
+      nil       = const $ return ()
       do_log    ∷ 𝕄 Compressor → AbsDir
                 → IO ([(AbsFile, FStat)], [(AbsDir, FStat)],
                       [(AbsFile, FPathIOError)],
@@ -73,15 +92,16 @@ fileSizeRotatorTests =
                      )
       do_log c d  = ж @IOError ∘ inDir d $ do
         let opts    = (new @_ @MaxFiles 10) & compressorMay ⊢ c
-                                                    & maxFileSize   ⊢ 10
-                                                    & maxFiles      ⊢ 3
+                                            & maxFileSize   ⊢ 10
+                                            & maxFiles      ⊢ 3
             rot     = fileSizeRotator opts (d ⫻ [relfile|logfile|])
             bopts   = BatchingOptions { flushMaxDelay = 1
                                       , blockWhenFull = 𝓣
                                       , flushMaxQueueSize = 1
                                       }
+
         -- we need to turn off batching here for predictable results
-        logToFiles' 𝓝 (𝓙 bopts) [] [] rot $ mapM_ (warnT @())
+        ((),_) ← logToFiles' 𝓝 (𝓙 bopts) [] [] rot $ mapM_ (warnT @())
                     [ "deleted??" -- this should get rotated away into the ether
                     , "123" -- each line gets a '\n' added, so that's four bytes
                     , "456" -- +4 => 8
@@ -105,8 +125,14 @@ fileSizeRotatorTests =
              , ("no subdirectories", \ (d,(_,ds,_,_)) →
                    assertEqual "directories" [d] (fst ⊳ ds)
                )
-          -- , ("listdir", \ (d,_)→listdirStdOut def d⪼assertSuccess "listdir")
-             , ("logfile names", \ (d,(fs,_,_,_)) →
+             ]
+             ◇ if list_dirs
+               then [ ("listdir",
+                       \ (d,_) → listdirStdOut def d ⪼ assertSuccess "listdir")
+                    ]
+               else []
+             ◇
+             [ ("logfile names", \ (d,(fs,_,_,_)) →
                    case sequence (stripDirFPE d ⊳ fst ⊳ fs) of
                      𝓛 e   → assertFailure $ show e
                      𝓡 fs' → let expect = [ [relfile|logfile|]
@@ -168,7 +194,7 @@ fileSizeRotatorTests =
                    let sizes  = sortOn fst $ bimap basename size ⊳ fs
                        expect = [ -- the 10-byte limit will only effect when
                                   -- compression is complete, which in practice
-                                  -- won't be untill all the writing is done; so
+                                  -- won't be until all the writing is done; so
                                   -- it all gets piled onto here
                                   ([relfile|logfile|],39)
                                   -- although 10 bytes uncompressed, the header
@@ -178,19 +204,13 @@ fileSizeRotatorTests =
                    assertEqual "file sizes" expect sizes
                )
              ]
-             {- ◇ ((\ (i∷ℕ,fn∷RelFile) → ("cat " ◇ show i, \ (d,_) → do
-                   ѥ (readFileUTF8Lenient @IOError fn) ≫ \ case
-                     𝓛 e → liftIO $ assertFailure (show e)
-                     𝓡 t → liftIO $ do
-                       putStrLn ("---- " ◇ T.pack (show fn) ◇ "----")
-                       putStrLn t
-                       putStrLn "----"
-                       assertSuccess ("cat" ◇ T.pack (show i))
-               )) ⊳ [ (0,[relfile|logfile.0|])
-                    , (1,[relfile|logfile.1|])
-                    , (2,[relfile|logfile.2|])
-                    ])
-             -}
+
+             ◇ if cat_files
+               then cat_file ⊳ [ [relfile|logfile.0|]
+                               , [relfile|logfile.1|]
+                               , [relfile|logfile.2|]
+                               ]
+               else []
             )
         ]
 

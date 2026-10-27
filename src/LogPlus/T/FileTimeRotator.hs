@@ -157,7 +157,7 @@ fileTimeRotatorTests =
              ]
              ◇ if list_dirs
                then [ ("listdir",
-                       \ (d,_)→listdirStdOut def d⪼assertSuccess "listdir")
+                       \ (d,_) → listdirStdOut def d ⪼ assertSuccess "listdir")
                     ]
                else []
              ◇

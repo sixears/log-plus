@@ -79,7 +79,6 @@ import LogPlus.FileTimeRotatorState    ( FileTimeRotatorState )
 -- τ is the time type, e.g. `Data.Time.Clock.UTCTime` or
 -- `Data.Time.LocalTime.LocalTime`
 
--- XXX use EMonad and friends?
 fileTimeRotator_ ∷ ∀ τ ω μ . MonadIO μ =>
                    FileTimeRotatorOptions τ
                  → -- | basename of the file to use for logging to; e.g.,

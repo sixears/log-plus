@@ -386,8 +386,6 @@ flusher hgen stvar renderT logit pw messages = do
   _ ← liftIO $ swapMVar stvar st'
   logit h t
 
-------------------------------------------------------------
-
 ----------------------------------------
 
 {-| Write to an FD with given options, using `withBatchedHandler`. Each log entry
